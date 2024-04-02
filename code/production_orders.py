@@ -2,11 +2,13 @@ from pydantic import BaseModel
 import json
 from enum import Enum
 
+
 class ProductionOrders(BaseModel):
     production_order_nr: int
     days_till_delivery: float
     product_id: int
     amount: int
+
 
 class Tastes(str, Enum):
     COLA = "cola"
@@ -14,19 +16,23 @@ class Tastes(str, Enum):
     APPLE_JUICE = "apple_juice"
     ORANGE_JUICE = "orange_juice"
 
+
 class BottleSizes(float, Enum):
     SMALL = 1.0
     MEDIUM = 1.5
     LARGE = 2.0
 
+
 class ProductSettings(BaseModel):
     bottle_size: BottleSizes
     taste: Tastes
+
 
 class Products(BaseModel):
     product_id: int
     product_name: str
     settings: ProductSettings
+
 
 class OrderSheet(BaseModel):
     production_orders: list[ProductionOrders]
@@ -34,12 +40,23 @@ class OrderSheet(BaseModel):
 
     def get_product(self: "OrderSheet", product_id: int) -> Products:
         if not hasattr(self, "_products_dict"):
-            self._products_dict = {product.product_id: product for product in self.products}
-        # We could use .get() here, but we want to raise a custom error if the product is not found
-        if product_id in self._products_dict:
-            return self._products_dict[product_id]
-        raise ValueError(f"Product with id {product_id} not found, available product ids: {[product.product_id for product in self.products]}")
+            self._products_dict = {
+                product.product_id: product for product in self.products
+            }
+        product = self._products_dict.get(product_id)
+        if product:
+            return product
 
+        # Update the dictionary incase new products have been added or modified
+        self._products_dict = {product.product_id: product for product in self.products}
+        product = self._products_dict.get(product_id)
+        if product:
+            return product
+        
+        # If product really is not in the list, we raise an error
+        raise ValueError(
+            f"Product with id {product_id} not found, available product ids: {[product.product_id for product in self.products]}"
+        )
 
 
 if __name__ == "__main__":
