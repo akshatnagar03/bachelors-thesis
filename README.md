@@ -3,7 +3,7 @@
 
 ## Development
 ### Git Fork Workflow
-See instructions here (Forking Workflow)[https://www.atlassian.com/git/tutorials/comparing-workflows/forking-workflow]
+See instructions here [Forking Workflow](https://www.atlassian.com/git/tutorials/comparing-workflows/forking-workflow)
 
 ### Dependencies
 1. Make sure you have [poetry](https://python-poetry.org/docs/#installation) installed. The most simple way is to install with `pip install poetry`, but follow the instructions in the link. You can test if you have poetry installed by running `poetry --version`.
