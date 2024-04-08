@@ -1,76 +1,52 @@
 from pydantic import BaseModel
-import json
-from enum import Enum
+import pandas as pd
+import datetime
 
+class Workstation(BaseModel):
+    name: str
+    max_units_per_run: int
+    minutes_per_run: float
+    minutes_changeover_time_taste: int
+    minutes_changeover_time_bottle_size: int
+    starts_at: datetime.time
+    stops_at: datetime.time
 
-class ProductionOrders(BaseModel):
-    production_order_nr: int
-    days_till_delivery: float
-    product_id: int
-    amount: int
-
-
-class Tastes(str, Enum):
-    COLA = "cola"
-    FANTA = "fanta"
-    APPLE_JUICE = "apple_juice"
-    ORANGE_JUICE = "orange_juice"
-
-
-class BottleSizes(float, Enum):
-    SMALL = 1.0
-    MEDIUM = 1.5
-    LARGE = 2.0
-
-
-class ProductSettings(BaseModel):
-    bottle_size: BottleSizes
-    taste: Tastes
-
-
-class Products(BaseModel):
+class Product(BaseModel):
     product_id: int
     product_name: str
-    settings: ProductSettings
+    setting_taste: str
+    setting_bottle_size: str | None
+    workstation_type: str
 
+class BillOfMaterial(BaseModel):
+    parent_id: int
+    parent_name: str
+    component_id: int
+    component_name: str
+    component_quantity: float
 
-class OrderSheet(BaseModel):
-    production_orders: list[ProductionOrders]
-    products: list[Products]
+class ProductionOrder(BaseModel):
+    production_order_nr: str
+    days_till_delivery: int
+    product_id: int
+    amount: int
+    liters_required: float | None = None
+    minutes_bottling_time: float | None = None
 
-    def get_product(self: "OrderSheet", product_id: int) -> Products:
-        if not hasattr(self, "_products_dict"):
-            self._products_dict = {
-                product.product_id: product for product in self.products
-            }
-        product = self._products_dict.get(product_id)
-        if product:
-            return product
+def parse_data(path: str):
+    workstations = pd.read_excel(path, sheet_name="workstations").replace(pd.NA, None).to_dict('records')
+    products = pd.read_excel(path, sheet_name="products").replace(pd.NA, None).to_dict('records')
+    bill_of_materials = pd.read_excel(path, sheet_name="bill of materials").replace(pd.NA, None).to_dict('records')
+    production_orders = pd.read_excel(path, sheet_name="production orders").replace(pd.NA, None).to_dict('records')
 
-        # Update the dictionary incase new products have been added or modified
-        self._products_dict = {product.product_id: product for product in self.products}
-        product = self._products_dict.get(product_id)
-        if product:
-            return product
-        
-        # If product really is not in the list, we raise an error
-        raise ValueError(
-            f"Product with id {product_id} not found, available product ids: {[product.product_id for product in self.products]}"
-        )
-
+    workstations = [Workstation(**workstation) for workstation in workstations] # type: ignore
+    products = [Product(**product) for product in products] # type: ignore
+    bill_of_materials = [BillOfMaterial(**bom) for bom in bill_of_materials] # type: ignore
+    production_orders = [ProductionOrder(**order) for order in production_orders] # type: ignore
+    return workstations, products, bill_of_materials, production_orders
 
 if __name__ == "__main__":
-    example_json = """
-    {
-        "production_orders": [
-        {"production_order_nr": 1, "days_till_delivery": 1.5, "product_id": 1, "amount": 1000}
-        ],
-        "products": [
-        {"product_id": 1, "product_name": "Cola 2L", "settings": {"bottle_size": 2, "taste": "cola"}},
-        {"product_id": 2, "product_name": "Cola 1.5L", "settings": {"bottle_size": 1.5, "taste": "cola"}}
-        ]
-    }
-    """
-    json_data = json.loads(example_json)
-    order_sheet = OrderSheet(**json_data)
-    print(order_sheet.model_dump())
+    data = parse_data("examples/data_v1.xlsx")
+    print(data[0])
+
+    
