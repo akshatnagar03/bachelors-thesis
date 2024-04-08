@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import pandas as pd
 import datetime
 
@@ -30,8 +30,15 @@ class ProductionOrder(BaseModel):
     days_till_delivery: int
     product_id: int
     amount: int
-    liters_required: float | None = None
-    minutes_bottling_time: float | None = None
+    liters_required: float = Field(alias="liters required")
+    minutes_bottling_time: float = Field(alias="Bottling time in minutes")
+
+class Data(BaseModel):
+    Workstations: list[Workstation]
+    products: list[Product]
+    bill_of_materials: list[BillOfMaterial]
+    production_orders: list[ProductionOrder]
+
 
 def parse_data(path: str):
     workstations = pd.read_excel(path, sheet_name="workstations").replace(pd.NA, None).to_dict('records')
@@ -43,10 +50,10 @@ def parse_data(path: str):
     products = [Product(**product) for product in products] # type: ignore
     bill_of_materials = [BillOfMaterial(**bom) for bom in bill_of_materials] # type: ignore
     production_orders = [ProductionOrder(**order) for order in production_orders] # type: ignore
-    return workstations, products, bill_of_materials, production_orders
+    return Data(Workstations=workstations, products=products, bill_of_materials=bill_of_materials, production_orders=production_orders)
 
 if __name__ == "__main__":
     data = parse_data("examples/data_v1.xlsx")
-    print(data[0])
+    print(data)
 
     
