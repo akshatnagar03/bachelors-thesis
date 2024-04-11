@@ -34,13 +34,13 @@ class ProductionOrder(BaseModel):
     minutes_bottling_time: float = Field(alias="Bottling time in minutes")
 
 class Data(BaseModel):
-    Workstations: list[Workstation]
+    workstations: list[Workstation]
     products: list[Product]
     bill_of_materials: list[BillOfMaterial]
     production_orders: list[ProductionOrder]
 
 
-def parse_data(path: str):
+def parse_data(path: str) -> Data:
     workstations = pd.read_excel(path, sheet_name="workstations").replace(pd.NA, None).to_dict('records')
     products = pd.read_excel(path, sheet_name="products").replace(pd.NA, None).to_dict('records')
     bill_of_materials = pd.read_excel(path, sheet_name="bill of materials").replace(pd.NA, None).to_dict('records')
@@ -50,7 +50,7 @@ def parse_data(path: str):
     products = [Product(**product) for product in products] # type: ignore
     bill_of_materials = [BillOfMaterial(**bom) for bom in bill_of_materials] # type: ignore
     production_orders = [ProductionOrder(**order) for order in production_orders] # type: ignore
-    return Data(Workstations=workstations, products=products, bill_of_materials=bill_of_materials, production_orders=production_orders)
+    return Data(workstations=workstations, products=products, bill_of_materials=bill_of_materials, production_orders=production_orders)
 
 if __name__ == "__main__":
     data = parse_data("examples/data_v1.xlsx")
