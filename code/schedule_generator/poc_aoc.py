@@ -1,5 +1,12 @@
 """Proof of Concept for Ant Colony Optimization Algorithm.
 This PoC is initially trying to generate a schedule, based on the constraints and a vector with consequitive tasks"""
+import networkx as nx
+from pydantic import BaseModel
+
+class Job(BaseModel):
+    duration: int
+    dependencies: list[int]
+    machine: int
 
 # Jobs in this list consists of tuples of (machine, duration)
 jobs_list = [[(0, 3), (1, 2), (2, 2)], [(0, 2), (2, 1), (1, 4)], [(1, 4), (2, 3)]]
@@ -16,7 +23,7 @@ jobs_list = [[(0, 3), (1, 2), (2, 2)], [(0, 2), (2, 1), (1, 4)], [(1, 4), (2, 3)
 #     3: {"duration": 5, "dependencies": [1], "machine": 2},
 #     4: {"duration": 2, "dependencies": [2], "machine": 2},
 # }
-jobs = {}
+jobs: dict[int, Job] = {}
 
 task_counter = 0
 for job in jobs_list:
@@ -28,7 +35,7 @@ for job in jobs_list:
             task_dict["dependencies"] = [task_counter - 1]
         task_dict["duration"] = task[1]
         task_dict["machine"] = task[0]
-        jobs[task_counter] = task_dict
+        jobs[task_counter] = Job(**task_dict)
         task_counter += 1
 
 
@@ -39,13 +46,12 @@ for job in jobs_list:
 job_order = [3, 0, 6, 4, 5, 7, 1, 2]
 
 # Contains all the machines that are utalized
-machines = set([job["machine"] for job in jobs.values()])
+machines = set([job.machine for job in jobs.values()])
 
 # Schedule contains the machines, and the tasks that are assigned to them
 # The list consists of tuples of (task, start_time, end_time)
 schedule: dict[int, list[tuple[int, int, int]]] = {
-    machine: [(-1, 0, 0)]
-    for machine in machines
+    machine: [(-1, 0, 0)] for machine in machines
 }
 
 # For each job we will try to start it as early as possible
@@ -55,9 +61,9 @@ schedule: dict[int, list[tuple[int, int, int]]] = {
 # Once we have the relevant tasks, we can calculate the start time of the job by
 # taking the maximum end time of the relevant tasks
 for job in job_order:
-    machine: int = jobs[job]["machine"]
-    dependencies: list[int] = jobs[job]["dependencies"]
-    duration: int = jobs[job]["duration"]
+    machine: int = jobs[job].machine
+    dependencies: list[int] = jobs[job].dependencies
+    duration: int = jobs[job].duration
     relevant_tasks = []
     # The last task on the machine is always relevant
     relevant_tasks.append(schedule[machine][-1])
