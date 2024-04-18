@@ -1,5 +1,18 @@
 """Proof of Concept for Ant Colony Optimization Algorithm.
-This PoC is initially trying to generate a schedule, based on the constraints and a vector with consequitive tasks"""
+This PoC is initially trying to generate a schedule, based on the constraints and a vector 
+with consequitive tasks.
+
+The idea is that a two-stage Ant Colony Optimization will happen.
+--- Stage 1 ---
+In the first stage each job will be assigned to one of the machines they could be assigned to.
+This could be either through ACO, but it might make more sense to use GA here.
+
+--- Stage 2 ---
+For this stage the true ACO will take place. We will let the ants run on the graph and 
+put out phermones. However we will also keep track of which tasks ("sub jobs") the ant has
+already assigned. There is also evidence that suggests that using local search could 
+significantly improve the result of this stage.
+"""
 import networkx as nx
 from pydantic import BaseModel
 
@@ -96,3 +109,40 @@ for machine in schedule.keys():
         if max_end_time < task[2]:
             max_end_time = task[2]
 print(f"Max end time: {max_end_time}")
+
+# Build a graph from the jobs dict
+G = nx.DiGraph()
+# We have a source and sink node
+G.add_nodes_from(["u", "v"])
+
+# Add all the task nodes
+nodes = [(x,{}) for x in jobs]
+G.add_nodes_from(nodes)
+
+# We need to create edges between all the nodes
+edges = []
+for (job_idx, job) in jobs.items():
+    # If we have an independent job (i.e. it can start whenever) it gets assigned to the source node
+    if len(job.dependencies) == 0:
+        edges.append(("u", job_idx, {"weight": 0}))
+    # If we have a dependency that one will have an edge between each other (directed)
+    # With the duration as weight
+    if len(job.dependencies) == 1:
+        edges.append((job.dependencies[0], job_idx, {"weight": jobs[job.dependencies[0]].duration}))
+    
+G.add_edges_from(edges)
+
+edges = []
+
+# Add the sink node edges for the nodes that only have a degree of 1
+# We ignore the sink and source nodes
+for node in G.nodes:
+    if node != "u" and node != "v" and G.degree[node] == 1: # type: ignore
+        edges.append((node, "v", {"weight": jobs[node].duration})) 
+
+
+G.add_edges_from(edges)
+
+# pos = nx.planar_layout(G)
+# nx.draw_networkx(G, pos=pos, with_labels=True)
+# plt.show()
