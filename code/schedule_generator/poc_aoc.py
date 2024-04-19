@@ -25,6 +25,7 @@ class Job(BaseModel):
     duration: int
     dependencies: list[int]
     machine: int
+    job_id: int
 
 
 # Jobs in this list consists of tuples of (machine, duration)
@@ -46,16 +47,28 @@ def read_jssp(text: str):
 
 # ft10 found at http://people.brunel.ac.uk/~mastjjb/jeb/orlib/files/jobshop1.txt
 # best known solution: 930
-text = """0 29 1 78 2  9 3 36 4 49 5 11 6 62 7 56 8 44 9 21
- 0 43 2 90 4 75 9 11 3 69 1 28 6 46 5 46 7 72 8 30
- 1 91 0 85 3 39 2 74 8 90 5 10 7 12 6 89 9 45 4 33
- 1 81 2 95 0 71 4 99 6  9 8 52 7 85 3 98 9 22 5 43
- 2 14 0  6 1 22 5 61 3 26 4 69 8 21 7 49 9 72 6 53
- 2 84 1  2 5 52 3 95 8 48 9 72 0 47 6 65 4  6 7 25
- 1 46 0 37 3 61 2 13 6 32 5 21 9 32 8 89 7 30 4 55
- 2 31 0 86 1 46 5 74 4 32 6 88 8 19 9 48 7 36 3 79
- 0 76 1 69 3 76 5 51 2 85 9 11 6 40 7 89 4 26 8 74
- 1 85 0 13 2 61 6  7 8 64 9 76 5 47 3 52 4 90 7 45"""
+# text = """0 29 1 78 2  9 3 36 4 49 5 11 6 62 7 56 8 44 9 21
+#  0 43 2 90 4 75 9 11 3 69 1 28 6 46 5 46 7 72 8 30
+#  1 91 0 85 3 39 2 74 8 90 5 10 7 12 6 89 9 45 4 33
+#  1 81 2 95 0 71 4 99 6  9 8 52 7 85 3 98 9 22 5 43
+#  2 14 0  6 1 22 5 61 3 26 4 69 8 21 7 49 9 72 6 53
+#  2 84 1  2 5 52 3 95 8 48 9 72 0 47 6 65 4  6 7 25
+#  1 46 0 37 3 61 2 13 6 32 5 21 9 32 8 89 7 30 4 55
+#  2 31 0 86 1 46 5 74 4 32 6 88 8 19 9 48 7 36 3 79
+#  0 76 1 69 3 76 5 51 2 85 9 11 6 40 7 89 4 26 8 74
+#  1 85 0 13 2 61 6  7 8 64 9 76 5 47 3 52 4 90 7 45"""
+
+# la01 best known solution: 666
+text = """1 21 0 53 4 95 3 55 2 34
+ 0 21 3 52 4 16 2 26 1 71
+ 3 39 4 98 1 42 2 31 0 12
+ 1 77 0 55 4 79 2 66 3 77
+ 0 83 3 34 2 64 1 19 4 37
+ 1 54 2 43 4 79 0 92 3 62
+ 3 69 4 77 1 87 2 87 0 93
+ 2 38 0 60 1 41 3 24 4 83
+ 3 17 1 49 4 25 0 44 2 98
+ 4 77 3 79 2 43 1 75 0 96"""
 
 # text = """2  1  0  3  1  6  3  7  5  3  4  6
 #  1  8  2  5  4 10  5 10  0 10  3  4
@@ -81,7 +94,7 @@ jobs_list = read_jssp(text)
 jobs: dict[int, Job] = {}
 
 task_counter = 1
-for job in jobs_list:
+for idx, job in enumerate(jobs_list):
     for task_idx, task in enumerate(job):
         task_dict = {}
         if task_idx == 0:
@@ -90,6 +103,7 @@ for job in jobs_list:
             task_dict["dependencies"] = [task_counter - 1]
         task_dict["duration"] = task[1]
         task_dict["machine"] = task[0]
+        task_dict["job_id"] = idx
         jobs[task_counter] = Job(**task_dict)
         task_counter += 1
 
@@ -268,7 +282,6 @@ class ACO:
             self.number_of_jobs = number_of_jobs
         else:
             self.number_of_jobs = len(self.jobs)
-        self.iteration_best = (1e100, [1])
 
     def run(self):
         if self.verbose:
@@ -276,6 +289,8 @@ class ACO:
                 f"Running ACO with:\n{self.rho=}\n{self.phi=}\n{self.alpha=}\n{self.beta=}\n{self.n_ants=}\n{self.n_iter=}"
             )
         for gen in range(self.n_iter):
+            if gen % 50 == 0 and not self.verbose:
+                print(f"Generation: {gen}, best found: {self.best_solution[0]}")
             solutions = []
             for ant in range(self.n_ants):
                 ants_job_order = self.generate_solution()
@@ -284,34 +299,26 @@ class ACO:
 
             if self.verbose:
                 print(
-                    f"Gen: {gen}, Overall best: {self.best_solution[0]}, Iteration best: {self.iteration_best[0]}"
+                    f"Gen: {gen}, Overall best: {self.best_solution[0]}, average: {np.average([s[0] for s in solutions]):.1f}, diversity: {len(set([s[0] for s in solutions]))/self.n_ants:.2f}"
                 )
 
-            if self.with_local_search:
-                self.uniform_search()
+            self.update_phermones(solutions=solutions)
 
-            self.update_phermones()
-
-            # Reset best iteration
-            self.iteration_best = (1e100, [0])
-
-    def uniform_search(self):
-        previous_best_time = self.best_solution[0]
-        for _ in range(self.local_iterations):
-            ants_job_order = self.generate_solution(uniform=True)
-            _ = self.evaluate(ants_job_order)
-
-        if previous_best_time != self.best_solution[0] and self.verbose:
-            print("Found better time in uniform search...")
 
     def generate_solution(self, *, uniform: bool = False) -> list[int]:
         next_valid_moves: list[int] = [n for n in self.graph.successors("u")]
         path = list()
         current = 0
+        next_move_uniform = uniform
         while len(path) < len(self.jobs):
+            if current == 0:
+                next_move_uniform = True
+            elif not uniform:
+                next_move_uniform = False
+
             # returns one tuple with the decided move
             selected_move = self._select_move(
-                current=current, valid_moves=next_valid_moves, unfirom=uniform
+                current=current, valid_moves=next_valid_moves, unfirom=next_move_uniform
             )
             # update the graph progress
             path.append(selected_move)
@@ -340,6 +347,10 @@ class ACO:
             probabilities[idx] = probability
 
         probabilities = probabilities / sum(probabilities)
+        if np.isnan(probabilities).any():
+            print("Found nan in probability")
+            print(f"{self.phermones[current,:]=}\n{probabilities=}\n{valid_moves=}")
+
         idx = np.random.choice([i for i in range(len(valid_moves))], p=probabilities)
         if unfirom:
             idx = np.random.choice([i for i in range(len(valid_moves))])
@@ -349,12 +360,10 @@ class ACO:
         make_span = calculate_make_span(job_order=job_order)
         if make_span < self.best_solution[0]:
             self.best_solution = (make_span, job_order)
-        if make_span < self.iteration_best[0]:
-            self.iteration_best = (make_span, job_order)
         return make_span
 
-    def update_phermones(self):
-        path = self._get_best_path()
+    def update_phermones(self, solutions: list[tuple[int, list[int]]]):
+        path = self._get_best_path(solutions)
         # We might be able to achive the same result by first multiplying with (1 - self.rho)
         # and then add the path matrix with the rewards
         for i, j in product(
@@ -362,23 +371,23 @@ class ACO:
         ):
             self.phermones[i, j] = (1 - self.rho) * self.phermones[i, j] + path[i, j]
 
-    def _get_best_path(self) -> np.ndarray:
+    def _get_best_path(self, solutions: list[tuple[int, list[int]]]) -> np.ndarray:
         path = np.zeros((self.phermones.shape[0], self.phermones.shape[1]))
-        delta_tau_best = 1.0 / self.best_solution[0]
+        delta_tau_best = (1.0 / self.best_solution[0]) * self.phi
         for idx, val in enumerate(self.best_solution[1]):
             if idx == 0:
-                path[0, val] = delta_tau_best * self.phi
+                path[0, val] += delta_tau_best 
             else:
-                path[self.best_solution[1][idx - 1], val] = delta_tau_best * self.phi
+                path[self.best_solution[1][idx - 1], val] += delta_tau_best 
+    
+        for sol_make_span, ant_path in solutions:
+            delta_tau_ant = (1.0 / sol_make_span)
+            for idx, val in enumerate(ant_path):
+                if idx == 0:
+                    path[0, val] += delta_tau_ant
+                elif (prev := ant_path[idx-1]) != val - 1:
+                    path[prev, val] += delta_tau_ant
 
-        delta_tau_iter_best = 1.0 / self.iteration_best[0]
-        for idx, val in enumerate(self.iteration_best[1]):
-            if idx == 0:
-                path[0, val] += delta_tau_iter_best * self.phi
-            else:
-                path[self.iteration_best[1][idx - 1], val] += (
-                    delta_tau_iter_best * self.phi
-                )
         return path
 
     def visualize_best(self):
@@ -390,26 +399,24 @@ class ACO:
         cmap = plt.get_cmap("tab10")
 
         column_major_job_id = (
-            np.arange(1, self.number_of_jobs * self.number_of_jobs + 1)
-            .reshape((self.number_of_jobs, self.number_of_jobs), order="C")
+            np.arange(1, self.number_of_jobs * 5 + 1)
+            .reshape((self.number_of_jobs, 5), order="C")
             .flatten(order="F")
         )
-
         # Plotting tasks for each machine
         for i, (machine, schedule) in enumerate(schedule.items()):
             for task in schedule:
                 job_id, start_time, end_time = task
                 if job_id == -1:
                     continue
-                big_job_id = int(np.ceil(job_id / self.number_of_jobs))
                 ax.plot(
                     [start_time, end_time],
                     [i + 1, i + 1],
                     linewidth=10,
                     solid_capstyle="butt",
-                    alpha=0.6,
-                    color=cmap(big_job_id % 10),
-                    label=big_job_id,
+                    alpha=0.8,
+                    color=cmap(jobs[job_id].job_id % 10),
+                    label=self.jobs[job_id].job_id,
                 )
                 ax.text(
                     (start_time + end_time) / 2,
@@ -440,19 +447,23 @@ class ACO:
 problem = JobShopSchedulingProblem(jobs=jobs, graph=G)
 aco = ACO(
     problem,
-    n_iter=1000,
-    n_ants=100,
+    n_iter=7000,
+    n_ants=30,
     tau=1.0,
     number_of_jobs=10,
     phi=1,
     rho=0.01,
-    beta=1,
-    local_iterations=30,
+    beta=1.3,
+    alpha=1,
+    local_iterations=80,
     with_local_search=True,
-    verbose=True,
-    seed=4566546
+    verbose=False,
+    seed=25
 )
 aco.run()
 print(aco.best_solution)
 print(np.round(aco.phermones, 1))
 aco.visualize_best()
+plt.imshow(aco.phermones, cmap='viridis')
+plt.colorbar(label='Pheromone Intensity')
+plt.show()
