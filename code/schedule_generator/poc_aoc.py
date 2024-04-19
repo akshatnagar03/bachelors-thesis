@@ -14,11 +14,15 @@ already assigned. There is also evidence that suggests that using local search c
 significantly improve the result of this stage.
 """
 
+from functools import cache
 from itertools import product
+from typing import Any, Callable
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 import numpy as np
 import matplotlib.pyplot as plt
+
+from poc_aoc_local_search import swap_in_critical_path, get_critical_path, generate_conjunctive_graph
 
 
 class Job(BaseModel):
@@ -116,7 +120,7 @@ for idx, job in enumerate(jobs_list):
 
 
 def make_schedule(job_order) -> dict[int, list[tuple[int, int, int]]]:
-    # Contains all the machines that are utalized
+    # Contains all the machines that are utilized
     machines = set([job.machine for job in jobs.values()])
 
     # Schedule contains the machines, and the tasks that are assigned to them
@@ -145,7 +149,7 @@ def make_schedule(job_order) -> dict[int, list[tuple[int, int, int]]]:
         # since job_order should guarantee that all dependencies are met
         # We add 1 to the length, since we always have the last task on the machine
         if len(relevant_tasks) != len(dependencies) + 1:
-            raise Exception(f"Dependencies not met for job {job} on machine {machine}")
+            raise Exception(f"Dependencies not met for job {job} on machine {machine}\n{job_order}")
 
         # Calculate the start time of the job as the maximum end_time in the relevant tasks
         start_time = max([task[2] for task in relevant_tasks])
@@ -155,7 +159,20 @@ def make_schedule(job_order) -> dict[int, list[tuple[int, int, int]]]:
 
     return schedule
 
+def list_to_tuple(function: Callable) -> Any:
+    """Custom decorator function, to convert list to a tuple."""
 
+    def wrapper(*args, **kwargs) -> Any:
+        args = tuple(tuple(x) if isinstance(x, list) else x for x in args)
+        kwargs = {k: tuple(v) if isinstance(v, list) else v for k, v in kwargs.items()}
+        result = function(*args, **kwargs)
+        result = tuple(result) if isinstance(result, list) else result
+        return result
+
+    return wrapper
+
+@list_to_tuple
+@cache
 def calculate_make_span(job_order):
     """For each job we will try to start it as early as possible
     We can do this by checking the dependencies and the last task on the machine
@@ -238,7 +255,8 @@ class ACO:
         problem: JobShopSchedulingProblem,
         *,
         rho: float = 0.1,
-        tau: float = 10.0,
+        tau: float = 1.0,
+        tau_min: float = 0.02,
         n_ants: int = 60,
         n_iter: int = 10,
         alpha: float = 1.0,
@@ -246,8 +264,9 @@ class ACO:
         beta: float = 1.0,
         seed: int = 42,
         number_of_jobs: int | None = None,
-        with_local_search: bool = True,
+        with_local_search: bool = False,
         local_iterations: int = 10,
+        with_unfirom_search: bool = False,
         verbose: bool = False,
     ):
         """
@@ -267,6 +286,8 @@ class ACO:
         self.graph = problem.graph
         self.rho = rho
         self.phi = phi
+        self.tau_max = tau
+        self.tau_min = tau_min
         self.n_ants = n_ants
         self.n_iter = n_iter
         self.alpha = alpha
@@ -276,8 +297,10 @@ class ACO:
         np.random.seed(seed)
         self.with_local_search = with_local_search
         self.local_iterations = local_iterations
+        self.with_uniform_search = with_unfirom_search
         self.best_solution = (1e100, [1])
         self.verbose = verbose
+        self.generations_since_last_improvement = 0
         if number_of_jobs:
             self.number_of_jobs = number_of_jobs
         else:
@@ -288,8 +311,10 @@ class ACO:
             print(
                 f"Running ACO with:\n{self.rho=}\n{self.phi=}\n{self.alpha=}\n{self.beta=}\n{self.n_ants=}\n{self.n_iter=}"
             )
+        last_best = self.best_solution[0]
         for gen in range(self.n_iter):
-            if gen % 50 == 0 and not self.verbose:
+            self.uniform_threashold = np.tanh(self.generations_since_last_improvement / 1000)
+            if gen % 20 == 0 and not self.verbose:
                 print(f"Generation: {gen}, best found: {self.best_solution[0]}")
             solutions = []
             for ant in range(self.n_ants):
@@ -298,12 +323,68 @@ class ACO:
                 solutions.append((ants_objective_time_value, ants_job_order))
 
             if self.verbose:
+                c_max_list = [s[0] for s in solutions]
                 print(
-                    f"Gen: {gen}, Overall best: {self.best_solution[0]}, average: {np.average([s[0] for s in solutions]):.1f}, diversity: {len(set([s[0] for s in solutions]))/self.n_ants:.2f}"
+                    f"Gen: {gen}, Overall best: {self.best_solution[0]}, min: {np.min(c_max_list)}, average: {np.average(c_max_list):.1f}, max: {np.max(c_max_list)}, diversity: {len(set([s[0] for s in solutions]))/self.n_ants:.2f}"
                 )
+
+            if last_best == self.best_solution[0]:
+                self.generations_since_last_improvement += 1
+            else:
+                last_best = self.best_solution[0]
+                self.generations_since_last_improvement = 0
+
+
+            if self.with_local_search:
+                self.local_search(solutions=solutions)
+            if self.with_uniform_search:
+                self.uniform_search()
 
             self.update_phermones(solutions=solutions)
 
+    def uniform_search(self):
+        best_time = self.best_solution[0]
+        number_of_ants = self.generations_since_last_improvement
+        for ant in range(number_of_ants):
+            ants_job_order = self.generate_solution(uniform=True)
+            self.evaluate(ants_job_order)
+        if self.best_solution[0] != best_time:
+            print(f"Uniform search found a better solution: {self.best_solution[0]}")
+
+
+    def local_search(self, solutions: list[tuple[int, list[int]]]):
+        iter_best_solution = solutions[np.argmin([s[0] for s in solutions])]
+        s_o_time = iter_best_solution[0]
+        s_o = iter_best_solution[1]
+        s_k = s_o
+        s_k_time = s_o_time
+        a = 0.9
+        for i in range(self.local_iterations):
+            conjunctive_graph = generate_conjunctive_graph(self.graph.copy(), self.jobs, s_k)
+            critical_path = get_critical_path(conjunctive_graph)
+            s_c = swap_in_critical_path(critical_path, s_o, self.jobs)
+            if not s_c:
+                continue
+            s_c_time = self.evaluate(s_c)
+            if s_o_time < s_c_time:
+                s_o = s_c
+                s_o_time = s_c_time
+                s_k = s_c
+                s_k_time = s_c_time
+            elif s_c_time < s_k_time:
+                s_k = s_c
+                s_k_time = s_c_time
+            else:
+                p_s_k_s_c = np.exp((s_k_time - s_c_time) / (a))
+                if np.random.rand() < p_s_k_s_c:
+                    s_k = s_c
+                    s_k_time = s_c_time
+            a = a * 0.9
+        if s_o_time < self.best_solution[0]:
+            print(f"Local search found a better solution: {s_o_time}")
+            self.best_solution = (s_o_time, s_o)
+        if s_o_time < iter_best_solution[0]:
+            print(f"Local search found a better solution (generationally): {s_o_time}")
 
     def generate_solution(self, *, uniform: bool = False) -> list[int]:
         next_valid_moves: list[int] = [n for n in self.graph.successors("u")]
@@ -318,7 +399,7 @@ class ACO:
 
             # returns one tuple with the decided move
             selected_move = self._select_move(
-                current=current, valid_moves=next_valid_moves, unfirom=next_move_uniform
+                current=current, valid_moves=next_valid_moves, uniform=next_move_uniform
             )
             # update the graph progress
             path.append(selected_move)
@@ -337,7 +418,7 @@ class ACO:
         return None
 
     def _select_move(
-        self, valid_moves: list[int], current: int, unfirom: bool = False
+        self, valid_moves: list[int], current: int, uniform: bool = False
     ) -> int:
         probabilities = np.zeros(len(valid_moves))
         for idx, move in enumerate(valid_moves):
@@ -347,13 +428,12 @@ class ACO:
             probabilities[idx] = probability
 
         probabilities = probabilities / sum(probabilities)
-        if np.isnan(probabilities).any():
-            print("Found nan in probability")
-            print(f"{self.phermones[current,:]=}\n{probabilities=}\n{valid_moves=}")
 
-        idx = np.random.choice([i for i in range(len(valid_moves))], p=probabilities)
-        if unfirom:
+        if np.random.rand() < self.uniform_threashold or uniform:
             idx = np.random.choice([i for i in range(len(valid_moves))])
+        else:
+            idx = np.random.choice([i for i in range(len(valid_moves))], p=probabilities)
+
         return valid_moves[idx]
 
     def evaluate(self, job_order: list[int]) -> int:
@@ -363,32 +443,37 @@ class ACO:
         return make_span
 
     def update_phermones(self, solutions: list[tuple[int, list[int]]]):
-        path = self._get_best_path(solutions)
+        phermone_update = self._get_best_path(solutions)
+        phermone_update = np.sqrt(phermone_update)
         # We might be able to achive the same result by first multiplying with (1 - self.rho)
         # and then add the path matrix with the rewards
         for i, j in product(
             range(self.phermones.shape[0]), range(self.phermones.shape[1])
         ):
-            self.phermones[i, j] = (1 - self.rho) * self.phermones[i, j] + path[i, j]
+            self.phermones[i, j] = min(max((1 - self.rho) * self.phermones[i, j] + phermone_update[i, j], self.tau_min), self.tau_max)
 
     def _get_best_path(self, solutions: list[tuple[int, list[int]]]) -> np.ndarray:
-        path = np.zeros((self.phermones.shape[0], self.phermones.shape[1]))
-        delta_tau_best = (1.0 / self.best_solution[0]) * self.phi
+        phermone_update = np.zeros((self.phermones.shape[0], self.phermones.shape[1]))
+        delta_tau_best = (1.0 / self.best_solution[0]) * self.phi 
         for idx, val in enumerate(self.best_solution[1]):
             if idx == 0:
-                path[0, val] += delta_tau_best 
+                phermone_update[0, val] += delta_tau_best 
             else:
-                path[self.best_solution[1][idx - 1], val] += delta_tau_best 
-    
+                phermone_update[self.best_solution[1][idx - 1], val] += delta_tau_best 
+
         for sol_make_span, ant_path in solutions:
-            delta_tau_ant = (1.0 / sol_make_span)
+            delta_tau_ant = (1.0 / sol_make_span) 
             for idx, val in enumerate(ant_path):
                 if idx == 0:
-                    path[0, val] += delta_tau_ant
+                    phermone_update[0, val] += delta_tau_ant
+                # Since we will encounter the next task of the same job must more often than any other job, we will be conservative on
+                # assigning phermones to that path
                 elif (prev := ant_path[idx-1]) != val - 1:
-                    path[prev, val] += delta_tau_ant
+                    phermone_update[prev, val] += delta_tau_ant
+                else:
+                    phermone_update[prev, val] += delta_tau_ant / (len(self.jobs) / 2)
 
-        return path
+        return phermone_update
 
     def visualize_best(self):
         schedule = make_schedule(self.best_solution[1])
@@ -418,10 +503,12 @@ class ACO:
                     color=cmap(jobs[job_id].job_id % 10),
                     label=self.jobs[job_id].job_id,
                 )
+                label = str(column_major_job_id[job_id - 1]),
+                label = job_id
                 ax.text(
                     (start_time + end_time) / 2,
                     i + 1,
-                    str(column_major_job_id[job_id - 1]),
+                    label,
                     va="center",
                     ha="right",
                     fontsize=12,
@@ -444,26 +531,30 @@ class ACO:
         plt.show()
 
 
-problem = JobShopSchedulingProblem(jobs=jobs, graph=G)
-aco = ACO(
-    problem,
-    n_iter=7000,
-    n_ants=30,
-    tau=1.0,
-    number_of_jobs=10,
-    phi=1,
-    rho=0.01,
-    beta=1.3,
-    alpha=1,
-    local_iterations=80,
-    with_local_search=True,
-    verbose=False,
-    seed=25
-)
-aco.run()
-print(aco.best_solution)
-print(np.round(aco.phermones, 1))
-aco.visualize_best()
-plt.imshow(aco.phermones, cmap='viridis')
-plt.colorbar(label='Pheromone Intensity')
-plt.show()
+if __name__ == "__main__":
+    problem = JobShopSchedulingProblem(jobs=jobs, graph=G)
+    aco = ACO(
+        problem,
+        n_iter=100,
+        n_ants=50,
+        tau=1.0,
+        tau_min=1e-4,
+        number_of_jobs=3,
+        phi=1,
+        rho=0.1,
+        beta=1,
+        alpha=1,
+        local_iterations=20,
+        with_local_search=False,
+        with_unfirom_search=False,
+        verbose=False,
+        seed=232435
+    )
+    # aco.best_solution = (704, [16, 46, 21, 31, 1, 36, 26, 11, 32, 6, 2, 3, 17, 41, 27, 47, 33, 28, 48, 18, 37, 7, 34, 42, 22, 43, 8, 23, 4, 35, 5, 29, 24, 25, 12, 30, 9, 38, 19, 49, 39, 44, 13, 45, 10, 20, 50, 14, 40, 15])
+    aco.run()
+    print(aco.best_solution)
+    print(np.round(aco.phermones, 1))
+    # aco.visualize_best()
+    plt.imshow(aco.phermones, cmap='viridis')
+    plt.colorbar(label='Pheromone Intensity')
+    plt.show()
