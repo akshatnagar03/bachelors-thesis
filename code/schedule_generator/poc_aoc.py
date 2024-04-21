@@ -16,13 +16,14 @@ significantly improve the result of this stage.
 
 from functools import cache
 from itertools import product
+import time
 from typing import Any, Callable
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 import numpy as np
 import matplotlib.pyplot as plt
 
-from poc_aoc_local_search import swap_in_critical_path, get_critical_path, generate_conjunctive_graph
+from poc_aoc_local_search import solve_optimally, swap_in_critical_path, get_critical_path, generate_conjunctive_graph
 
 
 class Job(BaseModel):
@@ -30,6 +31,7 @@ class Job(BaseModel):
     dependencies: list[int]
     machine: int
     job_id: int
+    task_id: int
 
 
 # Jobs in this list consists of tuples of (machine, duration)
@@ -95,21 +97,27 @@ jobs_list = read_jssp(text)
 #     3: {"duration": 5, "dependencies": [1], "machine": 2},
 #     4: {"duration": 2, "dependencies": [2], "machine": 2},
 # }
-jobs: dict[int, Job] = {}
 
-task_counter = 1
-for idx, job in enumerate(jobs_list):
-    for task_idx, task in enumerate(job):
-        task_dict = {}
-        if task_idx == 0:
-            task_dict["dependencies"] = []
-        else:
-            task_dict["dependencies"] = [task_counter - 1]
-        task_dict["duration"] = task[1]
-        task_dict["machine"] = task[0]
-        task_dict["job_id"] = idx
-        jobs[task_counter] = Job(**task_dict)
-        task_counter += 1
+def generate_job_list(job_list: list[list[tuple[int, int]]]) -> dict[int, Job]:
+    jobs: dict[int, Job] = {}
+    task_counter = 1
+    for idx, job in enumerate(job_list):
+        for task_idx, task in enumerate(job):
+            task_dict = {}
+            if task_idx == 0:
+                task_dict["dependencies"] = []
+            else:
+                task_dict["dependencies"] = [task_counter - 1]
+            task_dict["duration"] = task[1]
+            task_dict["machine"] = task[0]
+            task_dict["job_id"] = idx
+            task_dict["task_id"] = task_counter
+            jobs[task_counter] = Job(**task_dict)
+            task_counter += 1
+
+    return jobs
+
+jobs = generate_job_list(jobs_list)
 
 
 # The job_order list contains the order in which the jobs should be executed.
@@ -334,6 +342,7 @@ class ACO:
                 last_best = self.best_solution[0]
                 self.generations_since_last_improvement = 0
 
+            self.local_exact_search(solutions=solutions)
 
             if self.with_local_search:
                 self.local_search(solutions=solutions)
@@ -385,6 +394,27 @@ class ACO:
             self.best_solution = (s_o_time, s_o)
         if s_o_time < iter_best_solution[0]:
             print(f"Local search found a better solution (generationally): {s_o_time}")
+
+    def local_exact_search(self, solutions: list[tuple[int, list[int]]]):
+        # take best solution
+        # find a critical path block and solve it optimally
+        iter_best_job = solutions[np.argmin([s[0] for s in solutions])]
+        conjunctive_graph = generate_conjunctive_graph(self.graph.copy(), self.jobs, iter_best_job[1]) # type: ignore
+        critical_path: np.ndarray = get_critical_path(conjunctive_graph) # type: ignore
+        critical_path_block_middle = np.random.randint(2, len(critical_path) - 2)
+        index_start = iter_best_job[1].index(critical_path[critical_path_block_middle - 1])
+        index_end = iter_best_job[1].index(critical_path[critical_path_block_middle + 1])
+        job_block = iter_best_job[1][index_start:index_end + 1]
+        # solve it optimally
+
+        new_job_order = solve_optimally({job_id: self.jobs[job_id] for job_id in job_block})
+        complete_new_job_order = iter_best_job[1].copy()
+        complete_new_job_order[index_start:index_end + 1] = new_job_order
+        new_time = calculate_make_span(complete_new_job_order)
+        if new_time < self.best_solution[0]:
+            print(f"Local exact search found a better solution: {new_time}")
+            self.best_solution = (new_time, complete_new_job_order)
+
 
     def generate_solution(self, *, uniform: bool = False) -> list[int]:
         next_valid_moves: list[int] = [n for n in self.graph.successors("u")]
@@ -455,14 +485,17 @@ class ACO:
     def _get_best_path(self, solutions: list[tuple[int, list[int]]]) -> np.ndarray:
         phermone_update = np.zeros((self.phermones.shape[0], self.phermones.shape[1]))
         delta_tau_best = (1.0 / self.best_solution[0]) * self.phi 
+        # delta_tau_best = self.tau_min * 3
         for idx, val in enumerate(self.best_solution[1]):
             if idx == 0:
                 phermone_update[0, val] += delta_tau_best 
             else:
                 phermone_update[self.best_solution[1][idx - 1], val] += delta_tau_best 
 
+        return phermone_update
         for sol_make_span, ant_path in solutions:
             delta_tau_ant = (1.0 / sol_make_span) 
+            # delta_tau_ant = self.tau_min * 3
             for idx, val in enumerate(ant_path):
                 if idx == 0:
                     phermone_update[0, val] += delta_tau_ant
@@ -535,7 +568,7 @@ if __name__ == "__main__":
     problem = JobShopSchedulingProblem(jobs=jobs, graph=G)
     aco = ACO(
         problem,
-        n_iter=100,
+        n_iter=500,
         n_ants=50,
         tau=1.0,
         tau_min=1e-4,
@@ -554,7 +587,7 @@ if __name__ == "__main__":
     aco.run()
     print(aco.best_solution)
     print(np.round(aco.phermones, 1))
-    # aco.visualize_best()
+    # # aco.visualize_best()
     plt.imshow(aco.phermones, cmap='viridis')
     plt.colorbar(label='Pheromone Intensity')
     plt.show()

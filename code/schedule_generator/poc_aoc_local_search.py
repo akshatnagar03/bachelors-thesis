@@ -4,6 +4,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import TYPE_CHECKING
+import pyomo.environ as pyo
 
 if TYPE_CHECKING:
     from poc_aoc import Job
@@ -106,10 +107,58 @@ def swap_in_critical_path(
     )
     return new_order
 
+def solve_optimally(jobs: dict[int, "Job"]):
+    model = pyo.ConcreteModel()
+    model.tasks = pyo.Set(initialize=jobs.keys())
 
-# if __name__ == "__main__":
-#     jobs_list = [[(0, 3), (1, 2), (2, 2)], [(0, 2), (2, 1), (1, 4)], [(1, 4), (2, 3)]]
-#     jobs = generate_job(job_list=jobs_list)
+    model.start = pyo.Var(model.tasks, domain=pyo.NonNegativeReals)
+    model.c_max = pyo.Var(domain=pyo.NonNegativeReals)
+    # This will be 1 if task1 is before task2
+    model.precedence_var = pyo.Var([(task1, task2) for task1 in model.tasks for task2 in model.tasks if jobs[task1].machine == jobs[task2].machine and task1 != task2], domain=pyo.Binary)
+
+    model.obj = pyo.Objective(expr=model.c_max, sense=pyo.minimize)
+
+    # Could be done simpler with only constraints for the last jobs
+    def c_max_rule(m, task):
+        return  m.start[task] + jobs[task].duration <= m.c_max 
+    model.c_max_constraint = pyo.Constraint(model.tasks, rule=c_max_rule)
+
+    def precedence_rule(m, task):
+        return pyo.quicksum(m.start[dep] + jobs[dep].duration for dep in jobs[task].dependencies if dep in m.tasks) <= m.start[task]    
+    
+    model.precedence_constraint = pyo.Constraint(model.tasks, rule=precedence_rule)
+
+    def machine_rule_one(m, task1, task2):
+        if (task1, task2) in m.precedence_var:
+            return m.start[task1] + jobs[task1].duration <= m.start[task2] + 10e4 * (0 + m.precedence_var[task1, task2])
+        else:
+            return pyo.Constraint.Skip
+
+    model.machine_constraint_one = pyo.Constraint(model.tasks, model.tasks, rule=machine_rule_one)
+
+    def machine_rule_two(m, task1, task2):
+        if (task1, task2) in m.precedence_var:
+            return m.precedence_var[task1, task2] + m.precedence_var[task2, task1] <= 1
+        else:
+            return pyo.Constraint.Skip
+
+    model.machine_constraint_two = pyo.Constraint(model.tasks, model.tasks, rule=machine_rule_two)
+
+    pyo.SolverFactory("glpk").solve(model)
+
+    tasks = {task: model.start[task]() for task in model.tasks} # type: ignore
+
+    return [task for task, _ in sorted(tasks.items(), key=lambda x: x[1])] # type: ignore
+
+
+if __name__ == "__main__":
+    from poc_aoc import generate_job_list
+    jobs_list = [[(0, 3), (1, 2), (2, 2)], [(0, 2), (2, 1), (1, 4)], [(1, 4), (2, 3)]]
+    jobs = generate_job_list(job_list=jobs_list)
+    new_job_order = solve_optimally(jobs)
+    # Print starting_times
+    print(new_job_order)
+
 #     G = build_precedence_graph(jobs)
 #     job_order = [7, 4, 1, 2, 5, 3, 8, 6]
 #     G = generate_conjunctive_graph(G, jobs, job_order)
