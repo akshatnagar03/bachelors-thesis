@@ -321,7 +321,7 @@ class ACO:
             )
         last_best = self.best_solution[0]
         for gen in range(self.n_iter):
-            self.uniform_threashold = np.tanh(self.generations_since_last_improvement / 1000)
+            self.uniform_threashold = min(np.tanh(self.generations_since_last_improvement / 1000), 0.4)
             if gen % 20 == 0 and not self.verbose:
                 print(f"Generation: {gen}, best found: {self.best_solution[0]}")
             solutions = []
@@ -398,22 +398,24 @@ class ACO:
     def local_exact_search(self, solutions: list[tuple[int, list[int]]]):
         # take best solution
         # find a critical path block and solve it optimally
-        iter_best_job = solutions[np.argmin([s[0] for s in solutions])]
-        conjunctive_graph = generate_conjunctive_graph(self.graph.copy(), self.jobs, iter_best_job[1]) # type: ignore
-        critical_path: np.ndarray = get_critical_path(conjunctive_graph) # type: ignore
-        critical_path_block_middle = np.random.randint(2, len(critical_path) - 2)
-        index_start = iter_best_job[1].index(critical_path[critical_path_block_middle - 1])
-        index_end = iter_best_job[1].index(critical_path[critical_path_block_middle + 1])
-        job_block = iter_best_job[1][index_start:index_end + 1]
-        # solve it optimally
+        best_jobs = sorted(solutions, key=lambda x: x[0])
+        for i in range(3):
+            iter_best_job = best_jobs[i]
+            conjunctive_graph = generate_conjunctive_graph(self.graph.copy(), self.jobs, iter_best_job[1]) # type: ignore
+            critical_path: np.ndarray = get_critical_path(conjunctive_graph) # type: ignore
+            critical_path_block_middle = np.random.randint(2, len(critical_path) - 2)
+            index_start = iter_best_job[1].index(critical_path[critical_path_block_middle - 1])
+            index_end = iter_best_job[1].index(critical_path[critical_path_block_middle + 1])
+            job_block = iter_best_job[1][index_start:index_end + 1]
+            # solve it optimally
 
-        new_job_order = solve_optimally({job_id: self.jobs[job_id] for job_id in job_block})
-        complete_new_job_order = iter_best_job[1].copy()
-        complete_new_job_order[index_start:index_end + 1] = new_job_order
-        new_time = calculate_make_span(complete_new_job_order)
-        if new_time < self.best_solution[0]:
-            print(f"Local exact search found a better solution: {new_time}")
-            self.best_solution = (new_time, complete_new_job_order)
+            new_job_order = solve_optimally({job_id: self.jobs[job_id] for job_id in job_block})
+            complete_new_job_order = iter_best_job[1].copy()
+            complete_new_job_order[index_start:index_end + 1] = new_job_order
+            new_time = calculate_make_span(complete_new_job_order)
+            if new_time < self.best_solution[0]:
+                print(f"Local exact search found a better solution: {new_time}")
+                self.best_solution = (new_time, complete_new_job_order)
 
 
     def generate_solution(self, *, uniform: bool = False) -> list[int]:
@@ -492,7 +494,7 @@ class ACO:
             else:
                 phermone_update[self.best_solution[1][idx - 1], val] += delta_tau_best 
 
-        return phermone_update
+        # return phermone_update
         for sol_make_span, ant_path in solutions:
             delta_tau_ant = (1.0 / sol_make_span) 
             # delta_tau_ant = self.tau_min * 3
@@ -566,15 +568,16 @@ class ACO:
 
 if __name__ == "__main__":
     problem = JobShopSchedulingProblem(jobs=jobs, graph=G)
+    start_time = time.time()
     aco = ACO(
         problem,
-        n_iter=500,
+        n_iter=100,
         n_ants=50,
         tau=1.0,
         tau_min=1e-4,
         number_of_jobs=3,
         phi=1,
-        rho=0.1,
+        rho=0.05,
         beta=1,
         alpha=1,
         local_iterations=20,
@@ -587,6 +590,7 @@ if __name__ == "__main__":
     aco.run()
     print(aco.best_solution)
     print(np.round(aco.phermones, 1))
+    print(f"Time taken: {time.time() - start_time}")
     # # aco.visualize_best()
     plt.imshow(aco.phermones, cmap='viridis')
     plt.colorbar(label='Pheromone Intensity')
