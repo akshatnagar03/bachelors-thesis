@@ -198,16 +198,18 @@ class ACO:
             return np.random.choice(valid_moves)
 
         probabilities = np.zeros(len(valid_moves))
+        denominator = 0.0
         for idx, move in enumerate(valid_moves):
             tau_r_s = self.phermones[current, move]
             eta_r_s = 1 / self.problem.jobs[move].duration ** self.beta
             numerator = tau_r_s * eta_r_s
             probabilities[idx] = numerator
+            denominator += numerator
 
         if np.random.rand() <= self.q_zero:
             return valid_moves[np.argmax(probabilities)]
 
-        denominator = np.sum(probabilities)
+        # denominator = np.sum(probabilities)
         if denominator == 0:
             return np.random.choice(valid_moves)
 
@@ -272,7 +274,7 @@ class ACO:
         conjunctive_graph = generate_conjunctive_graph(
             self.problem.graph.copy(), self.problem.jobs, path
         )
-        critical_path: np.ndarray = get_critical_path(conjunctive_graph) # type: ignore
+        critical_path: np.ndarray = get_critical_path(conjunctive_graph)  # type: ignore
         left_span = np.random.randint(1, 4)
         right_span = np.random.randint(1, 4)
         critical_path_block_middle = np.random.randint(
@@ -295,28 +297,30 @@ class ACO:
             self.generation_since_update = 0
         return complete_new_job_order, new_time
 
+    def run_and_update_ant(self):
+        path = self.run_ant()
+        makespan = self.problem.makespan(path)
+        if makespan < self.best_solution[0]:
+            if self.verbose:
+                print(f"New best solution found: {makespan}")
+            self.best_solution = (makespan, path)
+            self.generation_since_update = 0
+        self.local_update_phermones(path, makespan)
+        return (makespan, path)
+
     def run(self):
         for gen in range(self.n_iter):
             self.generation_since_update += 1
             solutions = list()
+
             for _ in range(self.n_ants):
-                path = self.run_ant()
-                makespan = self.problem.makespan(path)
-                solutions.append((makespan, path))
-                if makespan < self.best_solution[0]:
-                    if self.verbose:
-                        print(f"New best solution found: {makespan}")
-                    self.best_solution = (makespan, path)
-                    self.generation_since_update = 0
-                self.local_update_phermones(path, makespan)
+                res = self.run_and_update_ant()
+                solutions.append(res)
 
             for sol in sorted(solutions, key=lambda x: x[0])[:3]:
                 new_path, makespan = self.local_search(sol[1])
                 if makespan < sol[0]:
                     self.local_update_phermones(new_path, makespan)
-
-
-
 
             self.global_update_phermones()
             if self.verbose:
@@ -361,7 +365,15 @@ if __name__ == "__main__":
 
     start_time = time.time()
 
-    aco = ACO(problem, n_ants=50, n_iter=4000, verbose=False, seed=2345005, beta=1)
+    aco = ACO(
+        problem,
+        n_ants=50,
+        n_iter=100,
+        verbose=False,
+        seed=2345005,
+        beta=1,
+        tau_zero=1.0 / (100.0 * 1000.0),
+    )
     aco.run()
     print(
         f"Best makespan found: {aco.best_solution[0]}, which is {(aco.best_solution[0] - 945.0) / 945.0:.2%} of the optimal solution for this problem."
