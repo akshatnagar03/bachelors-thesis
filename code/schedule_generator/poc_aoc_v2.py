@@ -207,9 +207,6 @@ class ACO:
         if np.random.rand() <= self.q_zero:
             return valid_moves[np.argmax(probabilities)]
 
-        if np.random.rand() <= min(0.01 * self.generation_since_update, 0.4):
-            return np.random.choice(valid_moves)
-
         denominator = np.sum(probabilities)
         if denominator == 0:
             return np.random.choice(valid_moves)
@@ -235,40 +232,25 @@ class ACO:
                     self.best_solution[1][idx - 1], move
                 ] + self.alpha * inverse_best_distance
         return
-        delta_tau = np.zeros(self.phermones.shape)
-        inverse_best_distance = 1.0 / self.best_solution[0]
-        for idx, move in enumerate(self.best_solution[1]):
-            if idx == 0:
-                delta_tau[0, move] = inverse_best_distance
-            else:
-                delta_tau[self.best_solution[1][idx - 1], move] = inverse_best_distance
 
-        self.phermones = (1 - self.alpha) * self.phermones + self.alpha * delta_tau
-
-    def local_update_phermones(self, path: list[int]):
+    def local_update_phermones(self, path: list[int], make_span: float):
         """Updates the phermones locally using the rho paramater.
 
         Dorigo and Gambardella tested different functions for delta_tau, but for
         the sake of efficency we will use delta_tau = tau_o for transitions.
         This was also the best performing function in their tests.
         """
+        rho_delta_tau = self.rho * self.tau_zero
         for idx, move in enumerate(path):
             if idx == 0:
                 self.phermones[0, move] = (1 - self.rho) * self.phermones[
                     0, move
-                ] + self.rho * self.tau_zero
+                ] + rho_delta_tau
             else:
                 self.phermones[path[idx - 1], move] = (1 - self.rho) * self.phermones[
                     path[idx - 1], move
-                ] + self.rho * self.tau_zero
+                ] + rho_delta_tau
         return
-        delta_tau = np.zeros(self.phermones.shape)
-        for idx, move in enumerate(path):
-            if idx == 0:
-                delta_tau[0, move] = self.tau_zero
-            else:
-                delta_tau[path[idx - 1], move] = self.tau_zero
-        self.phermones = (1 - self.rho) * self.phermones + self.rho * delta_tau
 
     def run_ant(self):
         next_valid_moves: list[int] = [n for n in self.problem.graph.successors("u")]
@@ -284,7 +266,6 @@ class ACO:
             next_valid_moves.remove(current)
             next_valid_moves.extend(new_next_valid_moves)
 
-        self.local_update_phermones(path)
         return path
 
     def local_search(self, path: list[int]):
@@ -312,6 +293,7 @@ class ACO:
             print(f"Local exact search found a better solution: {new_time}")
             self.best_solution = (new_time, complete_new_job_order)
             self.generation_since_update = 0
+        return complete_new_job_order, new_time
 
     def run(self):
         for gen in range(self.n_iter):
@@ -326,9 +308,15 @@ class ACO:
                         print(f"New best solution found: {makespan}")
                     self.best_solution = (makespan, path)
                     self.generation_since_update = 0
+                self.local_update_phermones(path, makespan)
 
             for sol in sorted(solutions, key=lambda x: x[0])[:3]:
-                self.local_search(sol[1])
+                new_path, makespan = self.local_search(sol[1])
+                if makespan < sol[0]:
+                    self.local_update_phermones(new_path, makespan)
+
+
+
 
             self.global_update_phermones()
             if self.verbose:
@@ -360,7 +348,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
 
-    aco = ACO(problem, n_ants=10, n_iter=500, verbose=False, seed=34580, beta=1)
+    aco = ACO(problem, n_ants=25, n_iter=1000, verbose=False, seed=9525, beta=1)
     aco.run()
     print(
         f"Best makespan found: {aco.best_solution[0]}, which is {(aco.best_solution[0] - 660.0) / 666.0:.2%} of the optimal solution for this problem."
