@@ -222,11 +222,11 @@ class ACO:
             n_iter (int, optional): number of iterations (i.e. how many times global update will happen). 
                 Defaults to 50.
             seed (int, optional): seed for numpy.random. Defaults to 1234.
-            rho (float, optional): parameter for local update, and how much pheremones we evaoprate. Defaults to 0.1.
-            alpha (float, optional): paramter for global update, and how much the pheremones evaporate. Defaults to 0.1.
+            rho (float, optional): parameter for local update, and how much pheromones we evaoprate. Defaults to 0.1.
+            alpha (float, optional): paramter for global update, and how much the pheromones evaporate. Defaults to 0.1.
             beta (float, optional): parameter for the weight we put on the heuristic. Defaults to 2.0.
             q_zero (float, optional): paramter for how often we just choose the highest probability (exploitation). Defaults to 0.9.
-            tau_zero (float, optional): parameter for initial phermone levels, a good estimate for this is 1.0/(n * Z_best)
+            tau_zero (float, optional): parameter for initial pheromones levels, a good estimate for this is 1.0/(n * Z_best)
                 where n is the number of jobs/tasks and Z_best is a rough approximation of the optimal objective value. Defaults to 1.0/(50 * 750.0).
             verbose (bool, optional): defines how much should be printed to stdout. Defaults to False.
         """
@@ -241,11 +241,11 @@ class ACO:
         self.tau_zero = tau_zero
         self.verbose = verbose
 
-        # Phermones will be (tasks + 1) x (tasks + 1) matrix, since 0 is the
+        # pheromones will be (tasks + 1) x (tasks + 1) matrix, since 0 is the
         # starting node and we start counting tasks from 1, so we need to add 1
-        # to the number of tasks. However, (0,0) in phermones should become 0.0
+        # to the number of tasks. However, (0,0) in pheromones should become 0.0
         # quickly since it can never be chosen.
-        self.phermones = (
+        self.pheromones = (
             np.ones((problem.number_of_tasks + 1, problem.number_of_tasks + 1))
             * tau_zero
         )
@@ -266,7 +266,7 @@ class ACO:
         probabilities = np.zeros(len(valid_moves))
         denominator = 0.0
         for idx, move in enumerate(valid_moves):
-            tau_r_s = self.phermones[current, move]
+            tau_r_s = self.pheromones[current, move]
             # Heuristic information, this can be duration or setup times.
             # for setup times we run into the issue of dividing by zero, and having a strong bias towards very low setup times
             eta_r_s = 1 / self.problem.jobs[move].duration ** self.beta
@@ -285,8 +285,8 @@ class ACO:
         probabilities = probabilities / denominator
         return np.random.choice(valid_moves, p=probabilities)
 
-    def global_update_phermones(self):
-        """Update the phermones globally using the best solution found so far.
+    def global_update_pheromones(self):
+        """Update the pheromones globally using the best solution found so far.
 
         Note that, as opposed to many other ACO implementations we are using alpha here
         instead of the usually used rho, to be consistent with the paper of Dorigo & Gambardella."""
@@ -295,20 +295,20 @@ class ACO:
             # We always (implicitly) start at node 0 or the source node
             # This is why it's also handy that our task counter starts at 1
             if idx == 0:
-                self.phermones[0, move] = (1 - self.alpha) * self.phermones[
+                self.pheromones[0, move] = (1 - self.alpha) * self.pheromones[
                     0, move
                 ] + self.alpha * inverse_best_distance
             else:
-                # Update the pheremones for the transition from the previous node to the current node
-                self.phermones[self.best_solution[1][idx - 1], move] = (
+                # Update the pheromones for the transition from the previous node to the current node
+                self.pheromones[self.best_solution[1][idx - 1], move] = (
                     1 - self.alpha
-                ) * self.phermones[
+                ) * self.pheromones[
                     self.best_solution[1][idx - 1], move
                 ] + self.alpha * inverse_best_distance
         return
 
-    def local_update_phermones(self, path: list[int], make_span: float):
-        """Updates the phermones locally using the rho paramater.
+    def local_update_pheromones(self, path: list[int], make_span: float):
+        """Updates the pheromones locally using the rho paramater.
 
         Dorigo and Gambardella tested different functions for delta_tau, but for
         the sake of efficency we will use delta_tau = tau_o for transitions.
@@ -317,11 +317,11 @@ class ACO:
         rho_delta_tau = self.rho * self.tau_zero
         for idx, move in enumerate(path):
             if idx == 0:
-                self.phermones[0, move] = (1 - self.rho) * self.phermones[
+                self.pheromones[0, move] = (1 - self.rho) * self.pheromones[
                     0, move
                 ] + rho_delta_tau
             else:
-                self.phermones[path[idx - 1], move] = (1 - self.rho) * self.phermones[
+                self.pheromones[path[idx - 1], move] = (1 - self.rho) * self.pheromones[
                     path[idx - 1], move
                 ] + rho_delta_tau
         return
@@ -409,7 +409,7 @@ class ACO:
         return complete_new_job_order, new_time
 
     def run_and_update_ant(self) -> tuple[float, list[int]]:
-        """Method for running the ant and updating the phermones.
+        """Method for running the ant and updating the pheromones.
 
         Returns:
             tuple[float, list[int]]: makespan and path of the ant.
@@ -421,7 +421,7 @@ class ACO:
                 print(f"New best solution found: {makespan}")
             self.best_solution = (makespan, path)
             self.generation_since_update = 0
-        self.local_update_phermones(path, makespan)
+        self.local_update_pheromones(path, makespan)
         return (makespan, path)
 
     def run(self):
@@ -439,14 +439,14 @@ class ACO:
             # We take the 3 best solutions and do a local exact search on them
             for sol in sorted(solutions, key=lambda x: x[0])[:3]:
                 new_path, makespan = self.local_search(sol[1])
-                # If we found a better solution we update the phermones
+                # If we found a better solution we update the pheromones
                 # NOTE: this may be a bit too passive, it might perform better
-                # if the phermones are alway updated, since we are traversing a new path
+                # if the pheromones are alway updated, since we are traversing a new path
                 if makespan < sol[0]:
-                    self.local_update_phermones(new_path, makespan)
+                    self.local_update_pheromones(new_path, makespan)
 
-            # We update the phermones globally
-            self.global_update_phermones()
+            # We update the pheromones globally
+            self.global_update_pheromones()
             
             # If we are verbose we print the best makespan every generation
             if self.verbose:
@@ -510,7 +510,7 @@ if __name__ == "__main__":
     print(f"Path: {aco.best_solution[1]}")
     print(f"Took {time.time() - start_time:.2f} seconds to run.")
 
-    # Plot the phermones
-    plt.imshow(aco.phermones, cmap="viridis")
-    plt.colorbar(label="Pheromone Intensity")
+    # Plot the pheromones
+    plt.imshow(aco.pheromones, cmap="viridis")
+    plt.colorbar(label="pheromones Intensity")
     plt.show()
