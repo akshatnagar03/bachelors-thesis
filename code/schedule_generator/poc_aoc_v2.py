@@ -161,6 +161,7 @@ class JobShopProblem:
         schedule: dict[int, list[tuple[int, int, int]]] = {
             m: [(-1, 0, 0)] for m in self.machines
         }
+        job_schedule = dict()
 
         # Iterate (in order) over the job order and schedule the tasks
         for task_idx in job_order:
@@ -171,18 +172,10 @@ class JobShopProblem:
             relevant_tasks.append(latest_job_on_same_machine)
 
             # If we have dependencies we need to add them to the relevant tasks
-            # TODO: look into if this can be done more efficiently
-            # possibly by checking the machine assignments of the dependencies to avoid iterating over all machines
-            # that would reduce the complexity from O(d*m*n) to O(d*n) where d is number of dependencies, n is the number of
-            # jobs already scheduled and m is the number of machines
-            # another HACK would be to keep track of the schedule also as a dict with the task_id as key and the associated schedule tuple as value
-            # which could reduce the complexity to O(d), but at the cost of more memory usage and more addition when scheduling
             if len(task.dependencies) > 0:
                 for dep in task.dependencies:
-                    for m in self.machines:
-                        for t in schedule[m]:
-                            if t[0] == dep:
-                                relevant_tasks.append(t)
+                    if dep_task := job_schedule.get(dep):
+                        relevant_tasks.append(dep_task)
 
             # Make sure that we have all dependencies scheduled already
             if len(relevant_tasks) != len(task.dependencies) + 1:
@@ -203,6 +196,7 @@ class JobShopProblem:
                 + self.setup_times[latest_job_on_same_machine[0] - 1, task_idx - 1]
             )
             schedule[task.machine].append((task_idx, start_time, end_time))
+            job_schedule[task_idx] = (task.machine, start_time, end_time)
 
         return schedule
 
@@ -514,7 +508,7 @@ if __name__ == "__main__":
     aco = ACO(
         problem,
         n_ants=50,
-        n_iter=1000,
+        n_iter=200,
         verbose=False,
         seed=2234588805,
         beta=2,
