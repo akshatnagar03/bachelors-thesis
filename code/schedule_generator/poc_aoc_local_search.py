@@ -1,7 +1,6 @@
 """Contains the methods for local search"""
 
 import networkx as nx
-import numpy as np
 from typing import TYPE_CHECKING
 import pyomo.environ as pyo
 
