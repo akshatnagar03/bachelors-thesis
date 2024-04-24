@@ -303,21 +303,21 @@ class ACO:
 
         Note that, as opposed to many other ACO implementations we are using alpha here
         instead of the usually used rho, to be consistent with the paper of Dorigo & Gambardella."""
-        inverse_best_distance = 1.0 / self.best_solution[0]
+        inverse_best_distance = (1.0 / self.best_solution[0]) * self.alpha
         for idx, move in enumerate(self.best_solution[1]):
             # We always (implicitly) start at node 0 or the source node
             # This is why it's also handy that our task counter starts at 1
             if idx == 0:
                 self.pheromones[0, move] = (1 - self.alpha) * self.pheromones[
                     0, move
-                ] + self.alpha * inverse_best_distance
+                ] + inverse_best_distance
             else:
                 # Update the pheromones for the transition from the previous node to the current node
                 self.pheromones[self.best_solution[1][idx - 1], move] = (
                     1 - self.alpha
                 ) * self.pheromones[
                     self.best_solution[1][idx - 1], move
-                ] + self.alpha * inverse_best_distance
+                ] + inverse_best_distance
         return
 
     def local_update_pheromones(self, path: list[int], make_span: float):
@@ -369,7 +369,7 @@ class ACO:
 
         return path
 
-    def local_search(self, path: list[int]) -> tuple[list[int], float]:
+    def local_exact_search(self, path: list[int]) -> tuple[list[int], float]:
         """Do a local (exact) search on a part of the critical path.
 
         We do this by finding a block on the critical path, and then solve it optimally. The
@@ -449,7 +449,7 @@ class ACO:
 
             # We take the 3 best solutions and do a local exact search on them
             for sol in sorted(solutions, key=lambda x: x[0])[:3]:
-                new_path, makespan = self.local_search(sol[1])
+                new_path, makespan = self.local_exact_search(sol[1])
                 # If we found a better solution we update the pheromones
                 # NOTE: this may be a bit too passive, it might perform better
                 # if the pheromones are alway updated, since we are traversing a new path
@@ -512,7 +512,7 @@ if __name__ == "__main__":
         verbose=False,
         seed=2234588805,
         beta=2,
-        tau_zero=1.0 / (100.0 * 1000.0),
+        tau_zero=1.0 / (50.0 * 1000.0),
     )
     aco.run()
     print(
