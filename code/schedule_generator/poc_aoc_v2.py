@@ -1,3 +1,19 @@
+"""Proof of Concept for Ant Colony Optimization Algorithm.
+This PoC is initially trying to generate a schedule, based on the constraints and a vector
+with consequitive tasks.
+
+The idea is that a two-stage Ant Colony Optimization will happen.
+--- Stage 1 ---
+In the first stage each job will be assigned to one of the machines they could be assigned to.
+This could be either through ACO, but it might make more sense to use GA here.
+
+--- Stage 2 ---
+For this stage the true ACO will take place. We will let the ants run on the graph and
+put out phermones and follow them. However we will also keep track of which tasks ("sub jobs") the ant has
+already assigned. There is also evidence that suggests that using local search could
+significantly improve the result of this stage.
+"""
+
 import time
 from matplotlib import pyplot as plt
 import networkx as nx
@@ -13,16 +29,18 @@ from poc_aoc_local_search import (
 
 class Job(BaseModel):
     """Represents a job/task/operation in a job shop problem."""
+
     duration: int
     machine: int
     dependencies: list[int]
-    product_id: int | None # This will be used later to keep track of the setup times.
+    product_id: int | None  # This will be used later to keep track of the setup times.
     task_id: int
     job_id: int
 
 
 class JobShopProblem:
     """Represents a job shop problem, with a set of jobs and machines, and a graph of dependencies between the jobs."""
+
     def __init__(
         self,
         jobs: dict[int, Job],
@@ -41,7 +59,7 @@ class JobShopProblem:
         """Builds a graph for the job shop problem with edges as dependencies. It also adds source and sink nodes.
 
         Note that the weights, i.e. the duration of the tasks are added as the weight _to_ the node.
-        That means that if we go from job a to job b the weight for the job b will be on the edge from a to b. 
+        That means that if we go from job a to job b the weight for the job b will be on the edge from a to b.
         """
         G = nx.DiGraph()
         G.add_nodes_from(
@@ -49,7 +67,7 @@ class JobShopProblem:
             + [(x, {"machine": self.jobs[x].machine}) for x in self.jobs.keys()]
         )
         edges = list()
-        
+
         # For each job we add an edge, if it lacks dependencies it must start at the source node
         for job_idx, job in self.jobs.items():
             if len(job.dependencies) == 0:
@@ -79,7 +97,7 @@ class JobShopProblem:
         jobs: dict[int, Job] = dict()
         # We want to keep track on how many machines we have
         machines = set()
-        
+
         # We keep track on the amount of tasks we have created to assign them unique task ids
         task_counter = 1
         for idx, job in enumerate(job_list):
@@ -113,7 +131,7 @@ class JobShopProblem:
     @classmethod
     def from_standard_specification(cls, text: str):
         """Reads a standard job shop problem specification as defined here: http://jobshop.jjvh.nl/explanation.php.
-        
+
         This is a normal FJSSP with no setup times. The inputed text should not contain any machine and job numbers at the top.
         """
         list_of_jobs = list()
@@ -143,7 +161,7 @@ class JobShopProblem:
         schedule: dict[int, list[tuple[int, int, int]]] = {
             m: [(-1, 0, 0)] for m in self.machines
         }
-        
+
         # Iterate (in order) over the job order and schedule the tasks
         for task_idx in job_order:
             task: Job = self.jobs[task_idx]
@@ -153,9 +171,9 @@ class JobShopProblem:
             relevant_tasks.append(latest_job_on_same_machine)
 
             # If we have dependencies we need to add them to the relevant tasks
-            # TODO: look into if this can be done more efficiently 
+            # TODO: look into if this can be done more efficiently
             # possibly by checking the machine assignments of the dependencies to avoid iterating over all machines
-            # that would reduce the complexity from O(d*m*n) to O(d*n) where d is number of dependencies, n is the number of 
+            # that would reduce the complexity from O(d*m*n) to O(d*n) where d is number of dependencies, n is the number of
             # jobs already scheduled and m is the number of machines
             # another HACK would be to keep track of the schedule also as a dict with the task_id as key and the associated schedule tuple as value
             # which could reduce the complexity to O(d), but at the cost of more memory usage and more addition when scheduling
@@ -177,7 +195,7 @@ class JobShopProblem:
             # The start time is the maximum of the end times of the relevant tasks
             # Since we either have to wait for the machine to be free or the dependencies to be done
             start_time = max([t[2] for t in relevant_tasks])
-            
+
             # End time with setup time
             end_time = (
                 start_time
@@ -197,6 +215,7 @@ class JobShopProblem:
 
 class ACO:
     """Class for the Ant Colony Optimization algorithm for the job shop problem."""
+
     def __init__(
         self,
         problem: JobShopProblem,
@@ -217,9 +236,9 @@ class ACO:
 
         Args:
             problem (JobShopProblem): the job shop problem to solve.
-            n_ants (int, optional): number of ants to use, a good indication is (# of jobs)/2 based on 
+            n_ants (int, optional): number of ants to use, a good indication is (# of jobs)/2 based on
                 [this](https://arxiv.org/ftp/arxiv/papers/1309/1309.5110.pdf). Defaults to 10.
-            n_iter (int, optional): number of iterations (i.e. how many times global update will happen). 
+            n_iter (int, optional): number of iterations (i.e. how many times global update will happen).
                 Defaults to 50.
             seed (int, optional): seed for numpy.random. Defaults to 1234.
             rho (float, optional): parameter for local update, and how much pheromones we evaoprate. Defaults to 0.1.
@@ -370,18 +389,17 @@ class ACO:
             tuple[list[int], float]: tuple with the new path and the makespan.
         """
         # Create a conjunctive graph based on the (implicit) disjunctive graph
-        # in other words we connect the nodes that are on the same machine, with 
+        # in other words we connect the nodes that are on the same machine, with
         # directed edges in the order they are in the path.
         conjunctive_graph = generate_conjunctive_graph(
-            self.problem.graph.copy(), self.problem.jobs, path
-        ) 
+            self.problem.graph.copy(), self.problem.jobs, path # type: ignore
+        )
         # We get the critical path from the conjunctive graph, as the longest path
         critical_path: np.ndarray = get_critical_path(conjunctive_graph)  # type: ignore
-        
 
         left_span = np.random.randint(1, 4)
         right_span = np.random.randint(1, 4)
-        
+
         # We find a block in the critical path that we want to solve optimally
         critical_path_block_middle = np.random.randint(
             1 + left_span, len(critical_path) - 1 - right_span
@@ -395,12 +413,12 @@ class ACO:
         new_job_order = solve_optimally(
             {job_id: self.problem.jobs[job_id] for job_id in job_block}
         )
-        
+
         # Updating the path with the new found optimal solution block
         complete_new_job_order = path.copy()
         complete_new_job_order[index_start : index_end + 1] = new_job_order
         new_time = self.problem.makespan(complete_new_job_order)
-        
+
         # If we found a better solution we update it
         if new_time < self.best_solution[0]:
             print(f"Local exact search found a better solution: {new_time}")
@@ -425,8 +443,7 @@ class ACO:
         return (makespan, path)
 
     def run(self):
-        """Runs the ACO algorithm.
-        """
+        """Runs the ACO algorithm."""
         for gen in range(self.n_iter):
             self.generation_since_update += 1
             # We keep track of all the solutions found by the ants
@@ -447,7 +464,7 @@ class ACO:
 
             # We update the pheromones globally
             self.global_update_pheromones()
-            
+
             # If we are verbose we print the best makespan every generation
             if self.verbose:
                 print(f"Generation {gen}, best makespan: {self.best_solution[0]}")
