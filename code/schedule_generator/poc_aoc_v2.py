@@ -498,21 +498,21 @@ if __name__ == "__main__":
 8	69	9	81	2	94	4	96	3	27	0	69	7	45	6	78	1	74	5	84
 
 """
-    # problem = JobShopProblem.from_standard_specification(la01_text)
+    problem = JobShopProblem.from_standard_specification(la01_text)
     # problem = JobShopProblem.from_standard_specification(ft06_text)
-    problem = JobShopProblem.from_standard_specification(la16_text)
+    # problem = JobShopProblem.from_standard_specification(la16_text)
     # problem = JobShopProblem.from_list([[(0, 3, None), (1, 2, None), (2, 2, None)], [(0, 2, None), (2, 1, None), (1, 4, None)], [(1, 4, None), (2, 3, None)]])
 
     start_time = time.time()
 
     aco = ACO(
         problem,
-        n_ants=50,
-        n_iter=200,
-        verbose=False,
-        seed=2234588805,
-        beta=2,
-        tau_zero=1.0 / (50.0 * 1000.0),
+        n_ants=200,
+        n_iter=250,
+        verbose=True,
+        seed=2588805,
+        beta=0.0,
+        tau_zero=1.0 / (1000.0 * 1000),
     )
     aco.run()
     print(
