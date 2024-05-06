@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 import pandas as pd
 import datetime
 
+
 class Workstation(BaseModel):
     name: str
     max_units_per_run: int
@@ -11,6 +12,7 @@ class Workstation(BaseModel):
     starts_at: datetime.time
     stops_at: datetime.time
 
+
 class Product(BaseModel):
     product_id: int
     product_name: str
@@ -18,12 +20,14 @@ class Product(BaseModel):
     setting_bottle_size: str | None
     workstation_type: str
 
+
 class BillOfMaterial(BaseModel):
     parent_id: int
     parent_name: str
     component_id: int
     component_name: str
     component_quantity: float
+
 
 class ProductionOrder(BaseModel):
     production_order_nr: str
@@ -33,27 +37,56 @@ class ProductionOrder(BaseModel):
     liters_required: float = Field(alias="liters required")
     minutes_bottling_time: float = Field(alias="Bottling time in minutes")
 
+
 class Data(BaseModel):
     workstations: list[Workstation]
     products: list[Product]
     bill_of_materials: list[BillOfMaterial]
     production_orders: list[ProductionOrder]
+    workstation_df: pd.DataFrame
+    products_df: pd.DataFrame
+    bill_of_materials_df: pd.DataFrame
+    production_orders_df: pd.DataFrame
 
 
 def parse_data(path: str) -> Data:
-    workstations = pd.read_excel(path, sheet_name="workstations").replace(pd.NA, None).to_dict('records')
-    products = pd.read_excel(path, sheet_name="products").replace(pd.NA, None).to_dict('records')
-    bill_of_materials = pd.read_excel(path, sheet_name="bill of materials").replace(pd.NA, None).to_dict('records')
-    production_orders = pd.read_excel(path, sheet_name="production orders").replace(pd.NA, None).to_dict('records')
+    workstations_df = (
+        pd.read_excel(path, sheet_name="workstations")
+        .replace(pd.NA, None)
+        .to_dict("records")
+    )
+    products_df = (
+        pd.read_excel(path, sheet_name="products")
+        .replace(pd.NA, None)
+        .to_dict("records")
+    )
+    bill_of_materials_df = (
+        pd.read_excel(path, sheet_name="bill of materials")
+        .replace(pd.NA, None)
+        .to_dict("records")
+    )
+    production_orders_df = (
+        pd.read_excel(path, sheet_name="production orders")
+        .replace(pd.NA, None)
+        .to_dict("records")
+    )
 
-    workstations = [Workstation(**workstation) for workstation in workstations] # type: ignore
-    products = [Product(**product) for product in products] # type: ignore
-    bill_of_materials = [BillOfMaterial(**bom) for bom in bill_of_materials] # type: ignore
-    production_orders = [ProductionOrder(**order) for order in production_orders] # type: ignore
-    return Data(workstations=workstations, products=products, bill_of_materials=bill_of_materials, production_orders=production_orders)
+    workstations = [Workstation(**workstation) for workstation in workstations_df]  # type: ignore
+    products = [Product(**product) for product in products_df]  # type: ignore
+    bill_of_materials = [BillOfMaterial(**bom) for bom in bill_of_materials_df]  # type: ignore
+    production_orders = [ProductionOrder(**order) for order in production_orders_df]  # type: ignore
+    return Data(
+        workstations=workstations,
+        products=products,
+        bill_of_materials=bill_of_materials,
+        production_orders=production_orders,
+        workstation_df=workstations_df,
+        products_df=products_df,
+        bill_of_materials_df=bill_of_materials_df,
+        production_orders_df=production_orders_df,
+    )
+
 
 if __name__ == "__main__":
     data = parse_data("examples/data_v1.xlsx")
     print(data)
-
-    
