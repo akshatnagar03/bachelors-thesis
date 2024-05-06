@@ -20,7 +20,7 @@ import networkx as nx
 import numpy as np
 from pydantic import BaseModel
 
-from code.schedule_generator.poc_aco_local_search import (
+from src.schedule_generator.poc_aco_local_search import (
     generate_conjunctive_graph,
     get_critical_path,
     solve_optimally,
