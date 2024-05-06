@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import pyomo.environ as pyo
 
 if TYPE_CHECKING:
-    from poc_aoc_v2 import Job
+    from code.schedule_generator.poc_aco_v2 import Job
 
 
 def get_critical_path(graph: nx.DiGraph):
