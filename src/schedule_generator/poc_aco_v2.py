@@ -391,6 +391,7 @@ class ACO:
         # We get the critical path from the conjunctive graph, as the longest path
         critical_path: np.ndarray = get_critical_path(conjunctive_graph)  # type: ignore
 
+        # How many jobs on each side of the "middle" critical job, should be included?
         left_span = np.random.randint(1, 4)
         right_span = np.random.randint(1, 4)
 
