@@ -99,10 +99,10 @@ def solve_optimally(jobs: dict[int, "Job"]) -> list[int]:
         model.tasks, model.tasks, rule=machine_rule_two
     )
 
-    pyo.SolverFactory("cbc").solve(model)
-    # pyo.SolverFactory(
-    #     "cplex", executable=r"B:\Programs\cplex\cplex\bin\x64_win64\cplex.exe"
-    # ).solve(model)
+    # pyo.SolverFactory("cbc").solve(model)
+    pyo.SolverFactory(
+        "cplex", executable=r"B:\Programs\cplex\cplex\bin\x64_win64\cplex.exe"
+    ).solve(model)
 
     tasks = {task: model.start[task]() for task in model.tasks}  # type: ignore
 

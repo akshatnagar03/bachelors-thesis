@@ -15,6 +15,7 @@ significantly improve the result of this stage.
 """
 
 import time
+from typing import Any
 from matplotlib import pyplot as plt
 import networkx as nx
 import numpy as np
@@ -30,12 +31,21 @@ from src.schedule_generator.poc_aco_local_search import (
 class Job(BaseModel):
     """Represents a job/task/operation in a job shop problem."""
 
-    duration: int
+    duration: float
     machine: int
     dependencies: list[int]
-    product_id: int | None  # This will be used later to keep track of the setup times.
+    product_id: int = 0 # This will be used later to keep track of the setup times.
+    days_till_delivery: int = 1
+    available_machines: dict[int, float] = dict()
+    station_settings: dict[str, Any] = dict()
+    amount: int = 1
+    production_order_nr: str = ""
     task_id: int
-    job_id: int
+    job_id: Any
+
+    def assign_machine(self, machine: int):
+        self.machine = machine
+        self.duration = self.available_machines[machine]
 
 
 class JobShopProblem:
@@ -206,6 +216,9 @@ class JobShopProblem:
         # The makespan is simply the greatest end time of all tasks
         return max([t[-1][2] for t in schedule.values()])
 
+    def set_setup_times(self, setup_times: np.ndarray):
+        """Sets the setup times for the problem."""
+        self.setup_times = setup_times
 
 class ACO:
     """Class for the Ant Colony Optimization algorithm for the job shop problem."""
@@ -396,12 +409,24 @@ class ACO:
         right_span = np.random.randint(1, 4)
 
         # We find a block in the critical path that we want to solve optimally
+        lower = left_span + 1
+        upper = len(critical_path) - 1 - right_span
+        if lower >= upper:
+            lower = 1
+            upper = len(critical_path) - 2
         critical_path_block_middle = np.random.randint(
-            1 + left_span, len(critical_path) - 1 - right_span
+        lower, upper
         )
+        cp_index_start = critical_path_block_middle - left_span
+        if cp_index_start <= 0:
+            cp_index_start = 1
+        cp_index_end = critical_path_block_middle + right_span
+        if cp_index_end >= len(critical_path) - 1:
+            cp_index_end = len(critical_path) - 2
+
         # We need to get the index of the start and end of the block in the actual path
-        index_start = path.index(critical_path[critical_path_block_middle - left_span])
-        index_end = path.index(critical_path[critical_path_block_middle + right_span])
+        index_start = path.index(critical_path[cp_index_start])
+        index_end = path.index(critical_path[cp_index_end])
         job_block = path[index_start : index_end + 1]
 
         # Solve the block optimally, this is a fairly small problem so it should be done reasonably fast

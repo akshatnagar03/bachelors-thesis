@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 import pandas as pd
 import datetime
 
@@ -41,6 +41,8 @@ class ProductionOrder(BaseModel):
 class Data(BaseModel):
     """Contains all the data needed for the production scheduling problem.
     """
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     workstations: list[Workstation]
     products: list[Product]
     bill_of_materials: list[BillOfMaterial]
