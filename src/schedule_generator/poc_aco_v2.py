@@ -14,6 +14,7 @@ already assigned. There is also evidence that suggests that using local search c
 significantly improve the result of this stage.
 """
 
+from enum import Enum
 import time
 from typing import Any
 from matplotlib import pyplot as plt
@@ -216,9 +217,70 @@ class JobShopProblem:
         # The makespan is simply the greatest end time of all tasks
         return max([t[-1][2] for t in schedule.values()])
 
+    def maximum_lateness(self, job_order: list[int]) -> float:
+        """Returns the maximum lateness for a given job order"""
+        schedule = self.make_schedule(job_order)
+        # The maximum lateness is the greatest difference between the end time and the due date
+        flat_schedule = list()
+        for task in schedule.values():
+            flat_schedule.extend(task)
+        # Having max(0, x) could be beneficial because we are not interested in the earliness
+        return sum([max(t[2] - self.jobs[t[0]].days_till_delivery*24*60, 0) for t in flat_schedule if t[0] != -1])
+
     def set_setup_times(self, setup_times: np.ndarray):
         """Sets the setup times for the problem."""
         self.setup_times = setup_times
+
+    def visualize_schedule(self, schedule: dict[int, list[tuple[int, int, int]]]):
+        """Visualizes a schedule."""
+        fig, ax = plt.subplots(figsize=(13, 7))
+        cmap = plt.get_cmap("tab20")
+        for i, (machine, sch) in enumerate(schedule.items()):
+            for task in sch:
+                job_id, start_time, end_time = task
+                if job_id == -1:
+                    continue
+                ax.plot(
+                    [start_time, end_time],
+                    [i+1, i+1],
+                    linewidth=50,
+                    label=self.jobs[job_id].production_order_nr,
+                    solid_capstyle="butt",
+                    color=cmap(int(self.jobs[job_id].production_order_nr.removeprefix("P")))
+                )
+                color = "black"
+                if end_time - self.jobs[job_id].days_till_delivery*24*60 > 0:
+                    color = "red"
+
+                ax.text(
+                    (start_time + end_time) / 2,
+                    i + 1,
+                    self.jobs[job_id].production_order_nr,
+                    va="center",
+                    ha="right",
+                    fontsize=11,
+                    color=color
+                )
+        flat_schedule = list()
+        for val in schedule.values():
+            flat_schedule.extend(val)
+        max_time = max([t[2] for t in flat_schedule])
+
+        day_markers = np.arange(0, max_time, 24*60)
+        day_labels = [f"{d//24//60}" for d in day_markers]
+
+        plt.xticks(ticks=np.concatenate([day_markers]), labels=day_labels)
+        plt.yticks(ticks=np.arange(1, len(schedule) + 1), labels=[f"Machine {m}" for m in schedule.keys()])
+        plt.xlabel("Days")
+        plt.ylabel("Machine")
+        plt.tight_layout()
+        
+        plt.show()
+
+
+class ObjectiveFunction(Enum):
+    MAKESPAN = 1
+    MAXIMUM_LATENESS = 2
 
 
 class ACO:
@@ -227,6 +289,7 @@ class ACO:
     def __init__(
         self,
         problem: JobShopProblem,
+        objective_function: ObjectiveFunction = ObjectiveFunction.MAKESPAN,
         *,
         n_ants: int = 10,
         n_iter: int = 50,
@@ -269,6 +332,7 @@ class ACO:
         self.tau_zero = tau_zero
         self.verbose = verbose
         self.with_local_search = with_local_search
+        self.objective_function = objective_function
 
         # pheromones will be (tasks + 1) x (tasks + 1) matrix, since 0 is the
         # starting node and we start counting tasks from 1, so we need to add 1
@@ -280,6 +344,15 @@ class ACO:
         )
         self.best_solution: tuple[float, list[int]] = (1e100, [1])
         self.generation_since_update = 0
+
+    def evaluate(self, path: list[int]) -> float:
+        """Evaluates a path based on the objective function."""
+        if self.objective_function == ObjectiveFunction.MAKESPAN:
+            return self.problem.makespan(path)
+        elif self.objective_function == ObjectiveFunction.MAXIMUM_LATENESS:
+            return self.problem.maximum_lateness(path)
+        else:
+            raise ValueError("Objective function not implemented.")
 
     def draw_transition(self, current: int, valid_moves: list[int]):
         """Make a transistion from the current node to a valid node.
@@ -437,12 +510,12 @@ class ACO:
             {job_id: self.problem.jobs[job_id] for job_id in job_block}
         )
         if not new_job_order:
-            return path, self.problem.makespan(path)
+            return path, self.evaluate(path)
 
         # Updating the path with the new found optimal solution block
         complete_new_job_order = path.copy()
         complete_new_job_order[index_start : index_end + 1] = new_job_order
-        new_time = self.problem.makespan(complete_new_job_order)
+        new_time = self.evaluate(complete_new_job_order)
 
         # If we found a better solution we update it
         if new_time < self.best_solution[0]:
@@ -458,7 +531,7 @@ class ACO:
             tuple[float, list[int]]: makespan and path of the ant.
         """
         path = self.run_ant()
-        makespan = self.problem.makespan(path)
+        makespan = self.evaluate(path)
         if makespan < self.best_solution[0]:
             if self.verbose:
                 print(f"New best solution found: {makespan}")

@@ -1,6 +1,6 @@
 import numpy as np
 from src.schedule_generator.poc_aco_local_search import solve_optimally
-from src.schedule_generator.poc_aco_v2 import ACO, Job, JobShopProblem
+from src.schedule_generator.poc_aco_v2 import ACO, Job, JobShopProblem, ObjectiveFunction
 from src.schedule_generator.poc_aco_machine_assignment import ACOMachine
 from src.production_orders import Workstation, parse_data
 
@@ -72,14 +72,16 @@ if __name__ == "__main__":
     jssp = from_assigned_machine_to_jssp(machine_aco)
     aco = ACO(
         jssp,
+        objective_function=ObjectiveFunction.MAXIMUM_LATENESS,
         verbose=True,
         tau_zero=1 / (500.0 * 3800),
         n_ants=500,
-        n_iter=250,
+        n_iter=100,
         with_local_search=False,
-        seed=4564651,
+        seed=4234551,
         beta=1,
     )
     aco.run()
     print(aco.best_solution)
+    jssp.visualize_schedule(jssp.make_schedule(aco.best_solution[1]))
     # print(jssp.makespan(solve_optimally(jssp.jobs)))
