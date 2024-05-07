@@ -5,7 +5,7 @@ This matrix has the pheremone levels that job i is assigned to machine k (i,k). 
 heuristic value (visibility) will either be the inverse of the processing time, or something with setuptime, maybe dynamic?
 """
 
-from typing import Any, Self
+from typing import Self
 from src.production_orders import Data, parse_data
 from src.schedule_generator.poc_aco_v2 import Job
 
@@ -38,7 +38,8 @@ class ACOMachine:
             .values
         )
         machine_key = {
-            station_name: i for i, station_name in enumerate(mixing_lines + bottling_lines)
+            station_name: i
+            for i, station_name in enumerate(mixing_lines + bottling_lines)
         }
         for order in data.production_orders:
             # create sub-jobs for each order
@@ -79,7 +80,7 @@ class ACOMachine:
                         amount=size_of_job,
                         production_order_nr=order.production_order_nr,
                         task_id=job_counter,
-                        job_id=order.production_order_nr
+                        job_id=order.production_order_nr,
                     )
                 )
                 job_counter += 1
@@ -103,7 +104,7 @@ class ACOMachine:
                         amount=size_of_job,
                         production_order_nr=order.production_order_nr,
                         task_id=job_counter,
-                        job_id=order.production_order_nr
+                        job_id=order.production_order_nr,
                     )
                 )
                 job_counter += 1

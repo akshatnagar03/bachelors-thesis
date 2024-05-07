@@ -34,7 +34,7 @@ class Job(BaseModel):
     duration: float
     machine: int
     dependencies: list[int]
-    product_id: int = 0 # This will be used later to keep track of the setup times.
+    product_id: int = 0  # This will be used later to keep track of the setup times.
     days_till_delivery: int = 1
     available_machines: dict[int, float] = dict()
     station_settings: dict[str, Any] = dict()
@@ -220,6 +220,7 @@ class JobShopProblem:
         """Sets the setup times for the problem."""
         self.setup_times = setup_times
 
+
 class ACO:
     """Class for the Ant Colony Optimization algorithm for the job shop problem."""
 
@@ -401,7 +402,9 @@ class ACO:
         # in other words we connect the nodes that are on the same machine, with
         # directed edges in the order they are in the path.
         conjunctive_graph = generate_conjunctive_graph(
-            self.problem.graph.copy(), self.problem.jobs, path # type: ignore
+            self.problem.graph.copy(),
+            self.problem.jobs,
+            path,  # type: ignore
         )
         # We get the critical path from the conjunctive graph, as the longest path
         critical_path: np.ndarray = get_critical_path(conjunctive_graph)  # type: ignore
@@ -416,9 +419,7 @@ class ACO:
         if lower >= upper:
             lower = 1
             upper = len(critical_path) - 2
-        critical_path_block_middle = np.random.randint(
-        lower, upper
-        )
+        critical_path_block_middle = np.random.randint(lower, upper)
         cp_index_start = critical_path_block_middle - left_span
         if cp_index_start <= 0:
             cp_index_start = 1

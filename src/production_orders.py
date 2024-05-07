@@ -39,8 +39,8 @@ class ProductionOrder(BaseModel):
 
 
 class Data(BaseModel):
-    """Contains all the data needed for the production scheduling problem.
-    """
+    """Contains all the data needed for the production scheduling problem."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     workstations: list[Workstation]
@@ -54,27 +54,27 @@ class Data(BaseModel):
 
 
 def parse_data(path: str) -> Data:
-    workstations_df = (
-        pd.read_excel(path, sheet_name="workstations")
-        .replace(pd.NA, None)
+    workstations_df = pd.read_excel(path, sheet_name="workstations").replace(
+        pd.NA, None
     )
-    products_df = (
-        pd.read_excel(path, sheet_name="products")
-        .replace(pd.NA, None)
+    products_df = pd.read_excel(path, sheet_name="products").replace(pd.NA, None)
+    bill_of_materials_df = pd.read_excel(path, sheet_name="bill of materials").replace(
+        pd.NA, None
     )
-    bill_of_materials_df = (
-        pd.read_excel(path, sheet_name="bill of materials")
-        .replace(pd.NA, None)
-    )
-    production_orders_df = (
-        pd.read_excel(path, sheet_name="production orders")
-        .replace(pd.NA, None)
+    production_orders_df = pd.read_excel(path, sheet_name="production orders").replace(
+        pd.NA, None
     )
 
-    workstations = [Workstation(**workstation) for workstation in workstations_df.to_dict("records")]  # type: ignore
+    workstations = [
+        Workstation(**workstation) for workstation in workstations_df.to_dict("records")
+    ]  # type: ignore
     products = [Product(**product) for product in products_df.to_dict("records")]  # type: ignore
-    bill_of_materials = [BillOfMaterial(**bom) for bom in bill_of_materials_df.to_dict("records")]  # type: ignore
-    production_orders = [ProductionOrder(**order) for order in production_orders_df.to_dict("records")]  # type: ignore
+    bill_of_materials = [
+        BillOfMaterial(**bom) for bom in bill_of_materials_df.to_dict("records")
+    ]  # type: ignore
+    production_orders = [
+        ProductionOrder(**order) for order in production_orders_df.to_dict("records")
+    ]  # type: ignore
     return Data(
         workstations=workstations,
         products=products,

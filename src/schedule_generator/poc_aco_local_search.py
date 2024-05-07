@@ -52,7 +52,7 @@ def solve_optimally(jobs: dict[int, "Job"]) -> list[int]:
             (task1, task2)
             for task1 in model.tasks
             for task2 in model.tasks
-            if jobs[task1].machine == jobs[task2].machine and task1 != task2 # type: ignore
+            if jobs[task1].machine == jobs[task2].machine and task1 != task2  # type: ignore
         ],
         domain=pyo.Binary,
     )
