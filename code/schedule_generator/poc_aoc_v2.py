@@ -181,8 +181,9 @@ class JobShopProblem:
             if len(relevant_tasks) != len(task.dependencies) + 1:
                 raise ValueError(
                     f"Dependencies not met for task {task_idx},"
-                    f"relevant tasks: {relevant_tasks}.\nSize should be {len(task.dependencies) + 1},"
-                    f"but is {len(relevant_tasks)}"
+                    f" relevant tasks: {relevant_tasks}.\nSize should be {len(task.dependencies) + 1},"
+                    f" but is {len(relevant_tasks)}"
+                    f"\nJob order: {task.dependencies}, {job_order}"
                 )
 
             # The start time is the maximum of the end times of the relevant tasks
@@ -205,6 +206,17 @@ class JobShopProblem:
         schedule = self.make_schedule(job_order)
         # The makespan is simply the greatest end time of all tasks
         return max([t[-1][2] for t in schedule.values()])
+
+    def validate_schedule(self, job_order: list[int]) -> bool:
+        schedule = set()
+        for task_idx in job_order:
+            task = self.jobs[task_idx]
+            if len(task.dependencies) > 0:
+                for dep in task.dependencies:
+                    if dep not in schedule:
+                        return False
+            schedule.add(task_idx)
+        return True
 
 
 class ACO:
@@ -420,6 +432,20 @@ class ACO:
             self.generation_since_update = 0
         return complete_new_job_order, new_time
 
+    def local_search(self, solution: tuple[float, list[int]]) -> tuple[float, list[int]]:
+        # NOTE: need to add probability (according to this: https://pdf.sciencedirectassets.com/271420/1-s2.0-S0360835212X00032/1-s2.0-S0360835212000848/main.pdf?X-Amz-Security-Token=IQoJb3JpZ2luX2VjEEcaCXVzLWVhc3QtMSJHMEUCIQCCkwlwcsor%2B9f7KKn9VZAYPDUfbK7VXyriOz5kI9lCLwIgFc36BVz9kjkWHMPcQoM8dhOx4lNKOo%2BVv9YW3TwgJBsqvAUIkP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAFGgwwNTkwMDM1NDY4NjUiDDSuZOpJRf7%2BCvb2xSqQBat5kQtSO%2FIh1UCtc4GDEQPYVtEDahUEWTAt1gUR72Uqeu%2BqiAyZwIcg8BvX2pgE5D3g7ywG238LE1DW9z0fgzzMhrBmi0shye0zPkS7%2BVmPKNBFcbs%2FVRbQ4pazuO6nu4Wb2k3uIOSYzb2sRyjU4%2BovdEYVKDBv0OaJ6HT56UIvR1J6EptpeCfqQgeftlkzyQ5wCIHkGdbHioLz30q5%2FouesMZCocHC6WThR1OS7406cBfzTOvxot7A8fPtvcaAUWvI%2BOJi%2BRVaLhg3XWm%2BeYIBpAclTtDm1EEyEvUlmSGgDjXWBGdk9I4RpN6ibkUpQnB4opESyA0UWNw55dbtD7q5CxW5mNrGx3Jr6pltclIqY8L0LSCTC8F7wsA8H8XfclNI7fE8Wep7Ju%2FZvlpvjsMxKIVdZf5XRO3OORBQUZvs3ICzaVZ8SdErAlHB56LmlD%2BzxK%2F37wONZPAZXDOe%2BBwsVjvz6qs3SY1BdNONCg1WFYYAAbpRAYgC%2FjnE7SHJqHQ0dznGfPgIDd%2FpogdgwE5hh%2FaedA8EhapNiONypFz%2Fs%2BkfDXmnsW9wro8DP2ub%2Bi3Rdj0254H2AwOjC0prj%2FvHA1vaPrj6fY2zlCso2FCEjkqcMc316hiVDwrhWf2Ox9%2BWUIFXp31Y4kp9jV2iiv2ZVaP%2BDCBf7MhLUsCJxYUzwgRIHhAqKjEZmP3iIFMJq7lNNknJQXxfoTiN9AYQozwsV0GTP9KmpS3KhzQ54aa%2Firp7g2s%2BIhHj2%2BUZ3%2F%2BhZInFYXrNEolxcb0VDmOOF0fWaMuvjKTvnhdj%2FQNwY9D6II4pz2F6cYiAOQFWe6VKLSGnvgfMnT0X3GvOUyKrNG%2F1Qyc6yknE1wdRtzX3THIwMLCwpLEGOrEBnR2L%2BFRKQKSgkwNeGrbhrMdcjQpE31JqJH8hG25igWyNKScdLufjs1hVeqYKlgEUZtnEtoR3mm12TQSD66pZo%2F7st6MFj6JsjeL7EYheRhqCahpzp014aYHq9P%2FPQgBLYRrRNJJMDtDRLkE0R9NXxe3OhqBhRneE3KwDC6HMtAIkRE6xxH1ZnLj3%2FqhKdRHk%2FA1q%2BjaAoI7FItO%2FKQusRBl0DM79W2FUj4ANbuFIlX4Y&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20240424T160415Z&X-Amz-SignedHeaders=host&X-Amz-Expires=300&X-Amz-Credential=ASIAQ3PHCVTYXG4JV5OR%2F20240424%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=9960d4176eb20d4de8b57af66019205945fff6260348ab0c3b8e516f866711f5&hash=beb09b62aac7edaab75ee8f749516126cb4fefc2d43ac339cbced0551521dd38&host=68042c943591013ac2b2430a89b270f6af2c76d8dfd086a07176afe7c76c2c61&pii=S0360835212000848&tid=spdf-9ccd0a41-8f72-4604-9352-2b339bfe1e48&sid=cc3cca572b33c945c4284ea743712f348472gxrqb&type=client&tsoh=d3d3LnNjaWVuY2VkaXJlY3QuY29t&ua=000b5d5957595552&rr=879753fbdb31b8af&cc=nl)
+        job_order = solution[1]
+        best_local_found = solution
+        for i in range(len(job_order)):
+            for j in range(len(job_order)):
+                new_order = job_order.copy()
+                new_order[i], new_order[j] = new_order[j], new_order[i]
+                if self.problem.validate_schedule(new_order):
+                    new_time = self.problem.makespan(new_order)
+                    if new_time < best_local_found[0]:
+                        best_local_found = (new_time, new_order)
+        return best_local_found
+
     def run_and_update_ant(self) -> tuple[float, list[int]]:
         """Method for running the ant and updating the pheromones.
 
@@ -445,16 +471,18 @@ class ACO:
 
             for _ in range(self.n_ants):
                 res = self.run_and_update_ant()
+                res = self.local_search(res)
                 solutions.append(res)
 
+
             # We take the 3 best solutions and do a local exact search on them
-            for sol in sorted(solutions, key=lambda x: x[0])[:3]:
-                new_path, makespan = self.local_exact_search(sol[1])
-                # If we found a better solution we update the pheromones
-                # NOTE: this may be a bit too passive, it might perform better
-                # if the pheromones are alway updated, since we are traversing a new path
-                if makespan < sol[0]:
-                    self.local_update_pheromones(new_path, makespan)
+            # for sol in sorted(solutions, key=lambda x: x[0])[:3]:
+            #     new_path, makespan = self.local_exact_search(sol[1])
+            #     # If we found a better solution we update the pheromones
+            #     # NOTE: this may be a bit too passive, it might perform better
+            #     # if the pheromones are alway updated, since we are traversing a new path
+            #     if makespan < sol[0]:
+            #         self.local_update_pheromones(new_path, makespan)
 
             # We update the pheromones globally
             self.global_update_pheromones()
@@ -464,7 +492,6 @@ class ACO:
                 print(f"Generation {gen}, best makespan: {self.best_solution[0]}")
             elif gen % 20 == 0:
                 print(f"Generation {gen}, best makespan: {self.best_solution[0]}")
-
 
 if __name__ == "__main__":
     # Optimal solution for la01 is 666
@@ -509,7 +536,7 @@ if __name__ == "__main__":
         problem,
         n_ants=50,
         n_iter=200,
-        verbose=False,
+        verbose=True,
         seed=2234588805,
         beta=2,
         tau_zero=1.0 / (50.0 * 1000.0),
