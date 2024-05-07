@@ -66,6 +66,8 @@ def solve_optimally(jobs: dict[int, "Job"]) -> list[int]:
     model.c_max_constraint = pyo.Constraint(model.tasks, rule=c_max_rule)
 
     def precedence_rule(m, task):
+        if len(jobs[task].dependencies) == 0:
+            return pyo.Constraint.Skip
         return (
             pyo.quicksum(
                 m.start[dep] + jobs[dep].duration
@@ -99,10 +101,14 @@ def solve_optimally(jobs: dict[int, "Job"]) -> list[int]:
         model.tasks, model.tasks, rule=machine_rule_two
     )
 
-    # pyo.SolverFactory("cbc").solve(model)
-    pyo.SolverFactory(
-        "cplex", executable=r"B:\Programs\cplex\cplex\bin\x64_win64\cplex.exe"
-    ).solve(model)
+    try:
+        # pyo.SolverFactory("cbc").solve(model)
+        pyo.SolverFactory(
+            "cplex", executable=r"B:\Programs\cplex\cplex\bin\x64_win64\cplex.exe"
+        ).solve(model, tee=True)
+    except Exception as e:
+        print(f"Warning: Could not solve the problem optimally.\n {e}")
+        return []
 
     tasks = {task: model.start[task]() for task in model.tasks}  # type: ignore
 

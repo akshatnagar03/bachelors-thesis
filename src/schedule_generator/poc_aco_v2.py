@@ -236,6 +236,7 @@ class ACO:
         q_zero: float = 0.9,
         tau_zero: float = 1.0 / (50 * 750.0),
         verbose: bool = False,
+        with_local_search: bool = True,
     ):
         """Initializes the ACO algorithm.
 
@@ -266,6 +267,7 @@ class ACO:
         self.q_zero = q_zero
         self.tau_zero = tau_zero
         self.verbose = verbose
+        self.with_local_search = with_local_search
 
         # pheromones will be (tasks + 1) x (tasks + 1) matrix, since 0 is the
         # starting node and we start counting tasks from 1, so we need to add 1
@@ -433,6 +435,8 @@ class ACO:
         new_job_order = solve_optimally(
             {job_id: self.problem.jobs[job_id] for job_id in job_block}
         )
+        if not new_job_order:
+            return path, self.problem.makespan(path)
 
         # Updating the path with the new found optimal solution block
         complete_new_job_order = path.copy()
@@ -473,14 +477,15 @@ class ACO:
                 res = self.run_and_update_ant()
                 solutions.append(res)
 
-            # We take the 3 best solutions and do a local exact search on them
-            for sol in sorted(solutions, key=lambda x: x[0])[:3]:
-                new_path, makespan = self.local_exact_search(sol[1])
-                # If we found a better solution we update the pheromones
-                # NOTE: this may be a bit too passive, it might perform better
-                # if the pheromones are alway updated, since we are traversing a new path
-                if makespan < sol[0]:
-                    self.local_update_pheromones(new_path, makespan)
+            if self.with_local_search:
+                # We take the 3 best solutions and do a local exact search on them
+                for sol in sorted(solutions, key=lambda x: x[0])[:3]:
+                    new_path, makespan = self.local_exact_search(sol[1])
+                    # If we found a better solution we update the pheromones
+                    # NOTE: this may be a bit too passive, it might perform better
+                    # if the pheromones are alway updated, since we are traversing a new path
+                    if makespan < sol[0]:
+                        self.local_update_pheromones(new_path, makespan)
 
             # We update the pheromones globally
             self.global_update_pheromones()
