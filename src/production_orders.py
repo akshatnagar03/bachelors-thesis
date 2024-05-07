@@ -39,6 +39,8 @@ class ProductionOrder(BaseModel):
 
 
 class Data(BaseModel):
+    """Contains all the data needed for the production scheduling problem.
+    """
     workstations: list[Workstation]
     products: list[Product]
     bill_of_materials: list[BillOfMaterial]
@@ -53,28 +55,24 @@ def parse_data(path: str) -> Data:
     workstations_df = (
         pd.read_excel(path, sheet_name="workstations")
         .replace(pd.NA, None)
-        .to_dict("records")
     )
     products_df = (
         pd.read_excel(path, sheet_name="products")
         .replace(pd.NA, None)
-        .to_dict("records")
     )
     bill_of_materials_df = (
         pd.read_excel(path, sheet_name="bill of materials")
         .replace(pd.NA, None)
-        .to_dict("records")
     )
     production_orders_df = (
         pd.read_excel(path, sheet_name="production orders")
         .replace(pd.NA, None)
-        .to_dict("records")
     )
 
-    workstations = [Workstation(**workstation) for workstation in workstations_df]  # type: ignore
-    products = [Product(**product) for product in products_df]  # type: ignore
-    bill_of_materials = [BillOfMaterial(**bom) for bom in bill_of_materials_df]  # type: ignore
-    production_orders = [ProductionOrder(**order) for order in production_orders_df]  # type: ignore
+    workstations = [Workstation(**workstation) for workstation in workstations_df.to_dict("records")]  # type: ignore
+    products = [Product(**product) for product in products_df.to_dict("records")]  # type: ignore
+    bill_of_materials = [BillOfMaterial(**bom) for bom in bill_of_materials_df.to_dict("records")]  # type: ignore
+    production_orders = [ProductionOrder(**order) for order in production_orders_df.to_dict("records")]  # type: ignore
     return Data(
         workstations=workstations,
         products=products,
