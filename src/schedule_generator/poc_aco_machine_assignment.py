@@ -53,6 +53,8 @@ class ACOMachine:
             number_of_batches = int(
                 (order.amount * bottle_size) // mixing_line_max_amount
             )
+            if number_of_batches == 0 and order.amount > 0:
+                number_of_batches = 1
             for i in range(number_of_batches):
                 if i == number_of_batches - 1:
                     size_of_job = int(
