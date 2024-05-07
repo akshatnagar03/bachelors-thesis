@@ -402,9 +402,9 @@ class ACO:
         # in other words we connect the nodes that are on the same machine, with
         # directed edges in the order they are in the path.
         conjunctive_graph = generate_conjunctive_graph(
-            self.problem.graph.copy(),
+            self.problem.graph.copy(), # type: ignore
             self.problem.jobs,
-            path,  # type: ignore
+            path,  
         )
         # We get the critical path from the conjunctive graph, as the longest path
         critical_path: np.ndarray = get_critical_path(conjunctive_graph)  # type: ignore
