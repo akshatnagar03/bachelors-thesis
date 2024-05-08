@@ -1,3 +1,4 @@
+from matplotlib import pyplot as plt
 import numpy as np
 from src.schedule_generator.poc_aco_v2 import (
     Job,
@@ -329,7 +330,7 @@ if __name__ == "__main__":
     # data = parse_data("examples/data_v1_single.xlsx")
     # BKS (makespan): 3825
     # BKS (lateness w/ no earliness bonus): 14600
-    # BKS (lateness w/ no earliness bonus + machine hours): 17660
+    # BKS (lateness w/ no earliness bonus + machine hours): 17300
     data = parse_data("examples/data_v1.xlsx")
     machine_aco = FullJobShopProblem.from_data(data)
     machine_aco = assign_machines(machine_aco)
@@ -338,9 +339,10 @@ if __name__ == "__main__":
         objective_function=ObjectiveFunction.MAXIMUM_LATENESS,
         verbose=True,
         n_ants=500,
-        n_iter=100,
+        n_iter=10,
         tau_zero=1.0 / (500.0 * 15185.0),
-        seed=4566255,
+        seed=2345255,
+        beta=1
     )
     aco.run()
     print(f"{aco.best_solution=}")
@@ -348,4 +350,5 @@ if __name__ == "__main__":
         aco.best_solution[1], aco.best_solution[2]
     )
     aco.problem.jssp.visualize_schedule(schedule)
+    plt.savefig("example.png")
     # print(jssp.makespan(solve_optimally(jssp.jobs)))
