@@ -19,6 +19,11 @@ class FullJobShopProblem:
         self.sub_jobs = sub_jobs
         self.machine_key = machine_key
         self.set_setup_times()
+        self.set_workstation_workhours()
+
+    def set_workstation_workhours(self):
+        machine_workhours = {self.machine_key[w.name]: (w.starts_at.hour * 60 + w.starts_at.minute, w.stops_at.hour * 60 + w.stops_at.minute) for w in self.data.workstations}
+        self.jssp.machine_worktime = machine_workhours
 
     def set_setup_times(self):
         setup_times = np.zeros((len(self.jssp.jobs), len(self.jssp.jobs)))

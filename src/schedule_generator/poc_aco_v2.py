@@ -65,6 +65,7 @@ class JobShopProblem:
         self.number_of_tasks = number_of_tasks
         self.setup_times = np.zeros((number_of_tasks, number_of_tasks))
         self.graph = self._build_graph()
+        self.machine_worktime: dict[int, tuple[int, int]] = dict()
 
     def _build_graph(self) -> nx.DiGraph:
         """Builds a graph for the job shop problem with edges as dependencies. It also adds source and sink nodes.
@@ -157,7 +158,7 @@ class JobShopProblem:
         return cls.from_list(list_of_jobs)
 
     def make_schedule(
-        self, job_order: list[int], machine_assignment: list[int] = list()
+        self, job_order: list[int], machine_assignment: list[int] = list(), 
     ) -> dict[int, list[tuple[int, int, int]]]:
         """Returns a schedule where each machine has a list of tasks to perform. The list is a tuple with (task_id, duration, product_id).
 
@@ -170,8 +171,13 @@ class JobShopProblem:
         """
         # Initialize the schedule with a dummy task for each machine starting and ending at 0
         schedule: dict[int, list[tuple[int, int, int]]] = {
-            m: [(-1, 0, 6*60)] for m in self.machines
+            m: [(-1, 0, 0)] for m in self.machines
         }
+
+        if self.machine_worktime:
+            for machine, worktime in self.machine_worktime.items():
+                schedule[machine][0] = (-1, 0, worktime[0])
+
         job_schedule = dict()
         if machine_assignment:
             for idx, machine in enumerate(machine_assignment):
@@ -203,11 +209,24 @@ class JobShopProblem:
             # Since we either have to wait for the machine to be free or the dependencies to be done
             start_time = max([t[2] for t in relevant_tasks])
 
+            DAY_IN_MINUTES = 24 * 60
+
+            task_duration = task.duration + self.setup_times[latest_job_on_same_machine[0] - 1, task_idx - 1]
+
+            if self.machine_worktime:
+                # If the task is supposed to start before the machine start time, we wait until the machine is ready
+                if start_time % DAY_IN_MINUTES < self.machine_worktime[task.machine][0]:
+                    start_time = self.machine_worktime[task.machine][0] + (start_time // DAY_IN_MINUTES) * DAY_IN_MINUTES
+                
+                # If the task ends after the machine end time, we wait until the next day
+                if start_time % DAY_IN_MINUTES + task_duration > self.machine_worktime[task.machine][1]:
+                    start_time = self.machine_worktime[task.machine][0] + ((start_time // DAY_IN_MINUTES) + 1) * DAY_IN_MINUTES
+
+
             # End time with setup time
             end_time = (
                 start_time
-                + task.duration
-                + self.setup_times[latest_job_on_same_machine[0] - 1, task_idx - 1]
+                + task_duration 
             )
             schedule[task.machine].append((task_idx, start_time, end_time))
             job_schedule[task_idx] = (task.machine, start_time, end_time)
@@ -258,7 +277,7 @@ class JobShopProblem:
                 ax.text(
                     (start_time + end_time) / 2,
                     i + 1,
-                    self.jobs[job_id].production_order_nr,
+                    self.jobs[job_id].production_order_nr + f" ({job_id})",
                     va="center",
                     ha="right",
                     fontsize=11,
@@ -277,6 +296,12 @@ class JobShopProblem:
         plt.xlabel("Days")
         plt.ylabel("Machine")
         plt.tight_layout()
+
+        for machine in self.machine_worktime:
+            x_lines_start = np.arange(self.machine_worktime[machine][0], max_time, 24*60)
+            plt.vlines(x_lines_start, machine + 0.5, machine+1.5, linestyles="dashed", color="green")
+            x_lines_end = np.arange(self.machine_worktime[machine][1], max_time, 24*60)
+            plt.vlines(x_lines_end, machine + 0.5, machine+1.5, linestyles="dashed", color="red")
         
         plt.show()
 

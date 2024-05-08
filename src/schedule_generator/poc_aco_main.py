@@ -327,18 +327,16 @@ if __name__ == "__main__":
     # data = parse_data("examples/data_v1_single.xlsx")
     # BKS (makespan): 3825
     # BKS (lateness w/ no earliness bonus): 14600
+    # BKS (lateness w/ no earliness bonus + machine hours): 17660
     data = parse_data("examples/data_v1.xlsx")
     machine_aco = FullJobShopProblem.from_data(data)
     machine_aco = assign_machines(machine_aco)
-    jssp = from_assigned_machine_to_jssp(machine_aco)
     aco = FullACO(
         machine_aco, objective_function=ObjectiveFunction.MAXIMUM_LATENESS, verbose=True,
-        n_ants=500, n_iter=50, tau_zero= 1.0 / (500.0 * 15185.0)
+        n_ants=500, n_iter=100, tau_zero= 1.0 / (500.0 * 15185.0), seed=4566255
     )
     aco.run()
     print(f"{aco.best_solution=}")
-    print(aco.evaluate(aco.best_solution[1], aco.best_solution[2]))
-    print(jssp.maximum_lateness(aco.best_solution[1], aco.best_solution[2]))
-    schedule = jssp.make_schedule(aco.best_solution[1], aco.best_solution[2])
-    jssp.visualize_schedule(schedule)
+    schedule = aco.problem.jssp.make_schedule(aco.best_solution[1], aco.best_solution[2])
+    aco.problem.jssp.visualize_schedule(schedule)
     # print(jssp.makespan(solve_optimally(jssp.jobs)))
