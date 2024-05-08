@@ -141,7 +141,7 @@ class FullACO:
     def evaluate(self, path: list[int], machine_assignment: list[int]) -> float:
         """Evaluates a path based on the objective function."""
         if self.objective_function == ObjectiveFunction.MAKESPAN:
-            return self.problem.jssp.makespan(path)
+            return self.problem.jssp.makespan(path, machine_assignment)
         elif self.objective_function == ObjectiveFunction.MAXIMUM_LATENESS:
             return self.problem.jssp.maximum_lateness(path, machine_assignment)
         else:
@@ -330,7 +330,7 @@ if __name__ == "__main__":
     # data = parse_data("examples/data_v1_single.xlsx")
     # BKS (makespan): 3825
     # BKS (lateness w/ no earliness bonus): 14600
-    # BKS (lateness w/ no earliness bonus + machine hours): 17300
+    # BKS (lateness w/ no earliness bonus + machine hours): 16800
     data = parse_data("examples/data_v1.xlsx")
     machine_aco = FullJobShopProblem.from_data(data)
     machine_aco = assign_machines(machine_aco)
@@ -339,10 +339,11 @@ if __name__ == "__main__":
         objective_function=ObjectiveFunction.MAXIMUM_LATENESS,
         verbose=True,
         n_ants=500,
-        n_iter=10,
-        tau_zero=1.0 / (500.0 * 15185.0),
-        seed=2345255,
-        beta=1
+        n_iter=1000,
+        tau_zero=1.0 / (500.0 * 17985.0),
+        seed=2343235,
+        beta=1,
+        q_zero=0.7,
     )
     aco.run()
     print(f"{aco.best_solution=}")
