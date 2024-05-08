@@ -157,7 +157,7 @@ class JobShopProblem:
         return cls.from_list(list_of_jobs)
 
     def make_schedule(
-        self, job_order: list[int]
+        self, job_order: list[int], machine_assignment: list[int] = list()
     ) -> dict[int, list[tuple[int, int, int]]]:
         """Returns a schedule where each machine has a list of tasks to perform. The list is a tuple with (task_id, duration, product_id).
 
@@ -170,9 +170,12 @@ class JobShopProblem:
         """
         # Initialize the schedule with a dummy task for each machine starting and ending at 0
         schedule: dict[int, list[tuple[int, int, int]]] = {
-            m: [(-1, 0, 0)] for m in self.machines
+            m: [(-1, 0, 6*60)] for m in self.machines
         }
         job_schedule = dict()
+        if machine_assignment:
+            for idx, machine in enumerate(machine_assignment):
+                self.jobs[idx + 1].assign_machine(machine)
 
         # Iterate (in order) over the job order and schedule the tasks
         for task_idx in job_order:
@@ -217,9 +220,9 @@ class JobShopProblem:
         # The makespan is simply the greatest end time of all tasks
         return max([t[-1][2] for t in schedule.values()])
 
-    def maximum_lateness(self, job_order: list[int]) -> float:
+    def maximum_lateness(self, job_order: list[int], machine_assignment: list[int]) -> float:
         """Returns the maximum lateness for a given job order"""
-        schedule = self.make_schedule(job_order)
+        schedule = self.make_schedule(job_order, machine_assignment)
         # The maximum lateness is the greatest difference between the end time and the due date
         flat_schedule = list()
         for task in schedule.values():
@@ -350,7 +353,7 @@ class ACO:
         if self.objective_function == ObjectiveFunction.MAKESPAN:
             return self.problem.makespan(path)
         elif self.objective_function == ObjectiveFunction.MAXIMUM_LATENESS:
-            return self.problem.maximum_lateness(path)
+            return self.problem.maximum_lateness(path, list())
         else:
             raise ValueError("Objective function not implemented.")
 

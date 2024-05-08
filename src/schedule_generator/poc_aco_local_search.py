@@ -105,7 +105,7 @@ def solve_optimally(jobs: dict[int, "Job"]) -> list[int]:
         # pyo.SolverFactory("cbc").solve(model)
         pyo.SolverFactory(
             "cplex", executable=r"B:\Programs\cplex\cplex\bin\x64_win64\cplex.exe"
-        ).solve(model, tee=True)
+        ).solve(model, tee=False)
     except Exception as e:
         print(f"Warning: Could not solve the problem optimally.\n {e}")
         return []

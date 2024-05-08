@@ -6,22 +6,57 @@ heuristic value (visibility) will either be the inverse of the processing time, 
 """
 
 from typing import Self
-from src.production_orders import Data, parse_data
-from src.schedule_generator.poc_aco_v2 import Job
+
+import numpy as np
+from src.production_orders import Data, Workstation, parse_data
+from src.schedule_generator.poc_aco_v2 import Job, JobShopProblem
 
 
-class ACOMachine:
-    def __init__(self, problem: Data, sub_jobs: list[Job], machine_key: dict[str, int]):
-        self.problem = problem
+class FullJobShopProblem:
+    def __init__(self, data: Data, jssp: JobShopProblem, sub_jobs: list[Job], machine_key: dict[str, int]):
+        self.jssp = jssp
+        self.data = data
         self.sub_jobs = sub_jobs
         self.machine_key = machine_key
+        self.set_setup_times()
+
+    def set_setup_times(self):
+        setup_times = np.zeros((len(self.jssp.jobs), len(self.jssp.jobs)))
+        job_keys = list(self.jssp.jobs.keys())
+        reverse_machine_key = {v: k for k, v in self.machine_key.items()}
+        for j1 in job_keys:
+            for j2 in job_keys:
+                j1_job = self.jssp.jobs[j1]
+                j2_job = self.jssp.jobs[j2]
+
+                # If the jobs are from the same product, there are no setup times
+                if j1_job.product_id == j2_job.product_id:
+                    continue
+
+                machine: Workstation = [
+                    station
+                    for station in self.data.workstations
+                    if station.name == reverse_machine_key[list(j1_job.available_machines.keys())[0]]
+                ][0]
+                # If the jobs have different tastes, there is a setup time for both bottling and mixing
+                if j1_job.station_settings["taste"] != j2_job.station_settings["taste"]:
+                    setup_times[j1-1, j2-1] += machine.minutes_changeover_time_taste
+
+                # If the jobs are on a bottling line and have different bottle sizes, there is a setup time
+                if (
+                    j1_job.station_settings["bottle_size"]
+                    != j2_job.station_settings["bottle_size"]
+                    and "bottling" in machine.name.lower()
+                ):
+                    setup_times[j1-1, j2-1] += machine.minutes_changeover_time_bottle_size
+        self.jssp.set_setup_times(setup_times)
 
     @classmethod
     def from_data(cls, data: Data) -> Self:
         """This creates a new ACOMachine assignment problem from the given data.
         It will create the sub-jobs, so that they can fit the machines (i.e. batches of ) in the data."""
         sub_jobs = []
-        job_counter = 0
+        job_counter = 1
         mixing_lines = [
             station.name
             for station in data.workstations
@@ -110,12 +145,13 @@ class ACOMachine:
                     )
                 )
                 job_counter += 1
-        return cls(data, sub_jobs, machine_key)
+        jssp = JobShopProblem({job.task_id: job for job in sub_jobs}, machines=set(machine_key.values()),number_of_jobs=len(sub_jobs)//2,number_of_tasks=len(sub_jobs))
+        return cls(data, jssp,sub_jobs,  machine_key)
 
     def __str__(self) -> str:
-        return f"ACOMachine(problem={self.problem}, sub_jobs={self.sub_jobs})"
+        return f"ACOMachine(problem={self.data}, sub_jobs={self.sub_jobs})"
 
 
 if __name__ == "__main__":
     data = parse_data("examples/data_v1.xlsx")
-    ACOMachine.from_data(data)
+    FullJobShopProblem.from_data(data)
