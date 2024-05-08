@@ -276,12 +276,13 @@ class JobShopProblem:
         fig, ax = plt.subplots(figsize=(13, 7))
         cmap = plt.get_cmap("tab20")
         for i, (machine, sch) in enumerate(schedule.items()):
-            for task in sch:
+            for idx, task in enumerate(sch):
                 job_id, start_time, end_time = task
                 if job_id == -1:
                     continue
+                setup_time = self.setup_times[sch[idx-1][0] - 1, job_id - 1]
                 ax.plot(
-                    [start_time, end_time],
+                    [start_time+setup_time, end_time],
                     [i + 1, i + 1],
                     linewidth=50,
                     label=self.jobs[job_id].production_order_nr,
@@ -289,6 +290,16 @@ class JobShopProblem:
                     color=cmap(
                         int(self.jobs[job_id].production_order_nr.removeprefix("P"))
                     ),
+                )
+                ax.plot(
+                    [start_time,start_time+setup_time],
+                    [i+1, i+1],
+                    linewidth=50,
+                    solid_capstyle="butt",
+                    color=cmap(
+                        int(self.jobs[job_id].production_order_nr.removeprefix("P"))
+                    ),
+                    alpha=0.5
                 )
                 color = "black"
                 if end_time - self.jobs[job_id].days_till_delivery * 24 * 60 > 0:
