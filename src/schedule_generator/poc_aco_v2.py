@@ -243,9 +243,9 @@ class JobShopProblem:
 
         return schedule
 
-    def makespan(self, job_order: list[int]) -> float:
+    def makespan(self, job_order: list[int], machine_assignment: list[int]) -> float:
         """Returns the makespan for a given job order"""
-        schedule = self.make_schedule(job_order)
+        schedule = self.make_schedule(job_order, machine_assignment)
         # The makespan is simply the greatest end time of all tasks
         return max([t[-1][2] for t in schedule.values()])
 
