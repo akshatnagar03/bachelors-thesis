@@ -13,7 +13,13 @@ from src.schedule_generator.poc_aco_v2 import Job, JobShopProblem
 
 
 class FullJobShopProblem:
-    def __init__(self, data: Data, jssp: JobShopProblem, sub_jobs: list[Job], machine_key: dict[str, int]):
+    def __init__(
+        self,
+        data: Data,
+        jssp: JobShopProblem,
+        sub_jobs: list[Job],
+        machine_key: dict[str, int],
+    ):
         self.jssp = jssp
         self.data = data
         self.sub_jobs = sub_jobs
@@ -22,7 +28,13 @@ class FullJobShopProblem:
         self.set_workstation_workhours()
 
     def set_workstation_workhours(self):
-        machine_workhours = {self.machine_key[w.name]: (w.starts_at.hour * 60 + w.starts_at.minute, w.stops_at.hour * 60 + w.stops_at.minute) for w in self.data.workstations}
+        machine_workhours = {
+            self.machine_key[w.name]: (
+                w.starts_at.hour * 60 + w.starts_at.minute,
+                w.stops_at.hour * 60 + w.stops_at.minute,
+            )
+            for w in self.data.workstations
+        }
         self.jssp.machine_worktime = machine_workhours
 
     def set_setup_times(self):
@@ -41,11 +53,12 @@ class FullJobShopProblem:
                 machine: Workstation = [
                     station
                     for station in self.data.workstations
-                    if station.name == reverse_machine_key[list(j1_job.available_machines.keys())[0]]
+                    if station.name
+                    == reverse_machine_key[list(j1_job.available_machines.keys())[0]]
                 ][0]
                 # If the jobs have different tastes, there is a setup time for both bottling and mixing
                 if j1_job.station_settings["taste"] != j2_job.station_settings["taste"]:
-                    setup_times[j1-1, j2-1] += machine.minutes_changeover_time_taste
+                    setup_times[j1 - 1, j2 - 1] += machine.minutes_changeover_time_taste
 
                 # If the jobs are on a bottling line and have different bottle sizes, there is a setup time
                 if (
@@ -53,7 +66,9 @@ class FullJobShopProblem:
                     != j2_job.station_settings["bottle_size"]
                     and "bottling" in machine.name.lower()
                 ):
-                    setup_times[j1-1, j2-1] += machine.minutes_changeover_time_bottle_size
+                    setup_times[j1 - 1, j2 - 1] += (
+                        machine.minutes_changeover_time_bottle_size
+                    )
         self.jssp.set_setup_times(setup_times)
 
     @classmethod
@@ -150,8 +165,13 @@ class FullJobShopProblem:
                     )
                 )
                 job_counter += 1
-        jssp = JobShopProblem({job.task_id: job for job in sub_jobs}, machines=set(machine_key.values()),number_of_jobs=len(sub_jobs)//2,number_of_tasks=len(sub_jobs))
-        return cls(data, jssp,sub_jobs,  machine_key)
+        jssp = JobShopProblem(
+            {job.task_id: job for job in sub_jobs},
+            machines=set(machine_key.values()),
+            number_of_jobs=len(sub_jobs) // 2,
+            number_of_tasks=len(sub_jobs),
+        )
+        return cls(data, jssp, sub_jobs, machine_key)
 
     def __str__(self) -> str:
         return f"ACOMachine(problem={self.data}, sub_jobs={self.sub_jobs})"

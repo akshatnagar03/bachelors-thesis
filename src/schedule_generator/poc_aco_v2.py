@@ -158,7 +158,9 @@ class JobShopProblem:
         return cls.from_list(list_of_jobs)
 
     def make_schedule(
-        self, job_order: list[int], machine_assignment: list[int] = list(), 
+        self,
+        job_order: list[int],
+        machine_assignment: list[int] = list(),
     ) -> dict[int, list[tuple[int, int, int]]]:
         """Returns a schedule where each machine has a list of tasks to perform. The list is a tuple with (task_id, duration, product_id).
 
@@ -211,23 +213,31 @@ class JobShopProblem:
 
             DAY_IN_MINUTES = 24 * 60
 
-            task_duration = task.duration + self.setup_times[latest_job_on_same_machine[0] - 1, task_idx - 1]
+            task_duration = (
+                task.duration
+                + self.setup_times[latest_job_on_same_machine[0] - 1, task_idx - 1]
+            )
 
             if self.machine_worktime:
                 # If the task is supposed to start before the machine start time, we wait until the machine is ready
                 if start_time % DAY_IN_MINUTES < self.machine_worktime[task.machine][0]:
-                    start_time = self.machine_worktime[task.machine][0] + (start_time // DAY_IN_MINUTES) * DAY_IN_MINUTES
-                
-                # If the task ends after the machine end time, we wait until the next day
-                if start_time % DAY_IN_MINUTES + task_duration > self.machine_worktime[task.machine][1]:
-                    start_time = self.machine_worktime[task.machine][0] + ((start_time // DAY_IN_MINUTES) + 1) * DAY_IN_MINUTES
+                    start_time = (
+                        self.machine_worktime[task.machine][0]
+                        + (start_time // DAY_IN_MINUTES) * DAY_IN_MINUTES
+                    )
 
+                # If the task ends after the machine end time, we wait until the next day
+                if (
+                    start_time % DAY_IN_MINUTES + task_duration
+                    > self.machine_worktime[task.machine][1]
+                ):
+                    start_time = (
+                        self.machine_worktime[task.machine][0]
+                        + ((start_time // DAY_IN_MINUTES) + 1) * DAY_IN_MINUTES
+                    )
 
             # End time with setup time
-            end_time = (
-                start_time
-                + task_duration 
-            )
+            end_time = start_time + task_duration
             schedule[task.machine].append((task_idx, start_time, end_time))
             job_schedule[task_idx] = (task.machine, start_time, end_time)
 
@@ -239,7 +249,9 @@ class JobShopProblem:
         # The makespan is simply the greatest end time of all tasks
         return max([t[-1][2] for t in schedule.values()])
 
-    def maximum_lateness(self, job_order: list[int], machine_assignment: list[int]) -> float:
+    def maximum_lateness(
+        self, job_order: list[int], machine_assignment: list[int]
+    ) -> float:
         """Returns the maximum lateness for a given job order"""
         schedule = self.make_schedule(job_order, machine_assignment)
         # The maximum lateness is the greatest difference between the end time and the due date
@@ -247,7 +259,13 @@ class JobShopProblem:
         for task in schedule.values():
             flat_schedule.extend(task)
         # Having max(0, x) could be beneficial because we are not interested in the earliness
-        return sum([max(t[2] - self.jobs[t[0]].days_till_delivery*24*60, 0) for t in flat_schedule if t[0] != -1])
+        return sum(
+            [
+                max(t[2] - self.jobs[t[0]].days_till_delivery * 24 * 60, 0)
+                for t in flat_schedule
+                if t[0] != -1
+            ]
+        )
 
     def set_setup_times(self, setup_times: np.ndarray):
         """Sets the setup times for the problem."""
@@ -264,14 +282,16 @@ class JobShopProblem:
                     continue
                 ax.plot(
                     [start_time, end_time],
-                    [i+1, i+1],
+                    [i + 1, i + 1],
                     linewidth=50,
                     label=self.jobs[job_id].production_order_nr,
                     solid_capstyle="butt",
-                    color=cmap(int(self.jobs[job_id].production_order_nr.removeprefix("P")))
+                    color=cmap(
+                        int(self.jobs[job_id].production_order_nr.removeprefix("P"))
+                    ),
                 )
                 color = "black"
-                if end_time - self.jobs[job_id].days_till_delivery*24*60 > 0:
+                if end_time - self.jobs[job_id].days_till_delivery * 24 * 60 > 0:
                     color = "red"
 
                 ax.text(
@@ -281,28 +301,47 @@ class JobShopProblem:
                     va="center",
                     ha="right",
                     fontsize=11,
-                    color=color
+                    color=color,
                 )
         flat_schedule = list()
         for val in schedule.values():
             flat_schedule.extend(val)
         max_time = max([t[2] for t in flat_schedule])
 
-        day_markers = np.arange(0, max_time, 24*60)
+        day_markers = np.arange(0, max_time, 24 * 60)
         day_labels = [f"{d//24//60}" for d in day_markers]
 
         plt.xticks(ticks=np.concatenate([day_markers]), labels=day_labels)
-        plt.yticks(ticks=np.arange(1, len(schedule) + 1), labels=[f"Machine {m}" for m in schedule.keys()])
+        plt.yticks(
+            ticks=np.arange(1, len(schedule) + 1),
+            labels=[f"Machine {m}" for m in schedule.keys()],
+        )
         plt.xlabel("Days")
         plt.ylabel("Machine")
         plt.tight_layout()
 
         for machine in self.machine_worktime:
-            x_lines_start = np.arange(self.machine_worktime[machine][0], max_time, 24*60)
-            plt.vlines(x_lines_start, machine + 0.5, machine+1.5, linestyles="dashed", color="green")
-            x_lines_end = np.arange(self.machine_worktime[machine][1], max_time, 24*60)
-            plt.vlines(x_lines_end, machine + 0.5, machine+1.5, linestyles="dashed", color="red")
-        
+            x_lines_start = np.arange(
+                self.machine_worktime[machine][0], max_time, 24 * 60
+            )
+            plt.vlines(
+                x_lines_start,
+                machine + 0.5,
+                machine + 1.5,
+                linestyles="dashed",
+                color="green",
+            )
+            x_lines_end = np.arange(
+                self.machine_worktime[machine][1], max_time, 24 * 60
+            )
+            plt.vlines(
+                x_lines_end,
+                machine + 0.5,
+                machine + 1.5,
+                linestyles="dashed",
+                color="red",
+            )
+
         plt.show()
 
 
@@ -503,9 +542,9 @@ class ACO:
         # in other words we connect the nodes that are on the same machine, with
         # directed edges in the order they are in the path.
         conjunctive_graph = generate_conjunctive_graph(
-            self.problem.graph.copy(), # type: ignore
+            self.problem.graph.copy(),  # type: ignore
             self.problem.jobs,
-            path,  
+            path,
         )
         # We get the critical path from the conjunctive graph, as the longest path
         critical_path: np.ndarray = get_critical_path(conjunctive_graph)  # type: ignore

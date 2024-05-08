@@ -42,7 +42,7 @@ def from_assigned_machine_to_jssp(aco_machine: FullJobShopProblem) -> JobShopPro
             ][0]
             # If the jobs have different tastes, there is a setup time for both bottling and mixing
             if j1_job.station_settings["taste"] != j2_job.station_settings["taste"]:
-                setup_times[j1-1, j2-1] += machine.minutes_changeover_time_taste
+                setup_times[j1 - 1, j2 - 1] += machine.minutes_changeover_time_taste
 
             # If the jobs are on a bottling line and have different bottle sizes, there is a setup time
             if (
@@ -50,7 +50,9 @@ def from_assigned_machine_to_jssp(aco_machine: FullJobShopProblem) -> JobShopPro
                 != j2_job.station_settings["bottle_size"]
                 and "bottling" in machine.name.lower()
             ):
-                setup_times[j1-1, j2-1] += machine.minutes_changeover_time_bottle_size
+                setup_times[j1 - 1, j2 - 1] += (
+                    machine.minutes_changeover_time_bottle_size
+                )
 
     jssp.set_setup_times(setup_times)
     return jssp
@@ -332,11 +334,18 @@ if __name__ == "__main__":
     machine_aco = FullJobShopProblem.from_data(data)
     machine_aco = assign_machines(machine_aco)
     aco = FullACO(
-        machine_aco, objective_function=ObjectiveFunction.MAXIMUM_LATENESS, verbose=True,
-        n_ants=500, n_iter=100, tau_zero= 1.0 / (500.0 * 15185.0), seed=4566255
+        machine_aco,
+        objective_function=ObjectiveFunction.MAXIMUM_LATENESS,
+        verbose=True,
+        n_ants=500,
+        n_iter=100,
+        tau_zero=1.0 / (500.0 * 15185.0),
+        seed=4566255,
     )
     aco.run()
     print(f"{aco.best_solution=}")
-    schedule = aco.problem.jssp.make_schedule(aco.best_solution[1], aco.best_solution[2])
+    schedule = aco.problem.jssp.make_schedule(
+        aco.best_solution[1], aco.best_solution[2]
+    )
     aco.problem.jssp.visualize_schedule(schedule)
     # print(jssp.makespan(solve_optimally(jssp.jobs)))
