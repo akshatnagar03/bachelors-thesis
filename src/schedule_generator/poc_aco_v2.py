@@ -426,7 +426,7 @@ class ACO:
     def evaluate(self, path: list[int]) -> float:
         """Evaluates a path based on the objective function."""
         if self.objective_function == ObjectiveFunction.MAKESPAN:
-            return self.problem.makespan(path)
+            return self.problem.makespan(path, list())
         elif self.objective_function == ObjectiveFunction.MAXIMUM_LATENESS:
             return self.problem.maximum_lateness(path, list())
         else:
