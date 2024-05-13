@@ -284,6 +284,38 @@ class JobShopProblem:
                 if t[0] != -1
             ]
         )
+    
+    def total_setup_time(self, job_order: list[int], machine_assignment: list[int]) -> float:
+        schedule = self.make_schedule(job_order, machine_assignment)
+        total_setup_time = 0
+        for _, tasks in schedule.items():
+            for idx, (task_id, _, _) in enumerate(tasks):
+                if idx > 0:
+                    total_setup_time += self.setup_times[tasks[idx - 1][0] - 1, task_id - 1]
+                    
+        return total_setup_time
+
+    def custom_objective(self, job_order: list[int], machine_assignment: list[int]) -> float:
+        schedule = self.make_schedule(job_order, machine_assignment)
+        total_setup_time = 0
+        for _, tasks in schedule.items():
+            for idx, (task_id, _, _) in enumerate(tasks):
+                if idx > 0:
+                    total_setup_time += self.setup_times[tasks[idx - 1][0] - 1, task_id - 1]
+
+        flat_schedule = list()
+        for task in schedule.values():
+            flat_schedule.extend(task)
+        # Having max(0, x) could be beneficial because we are not interested in the earliness
+        tardiness = sum(
+            [
+                max(t[2] - self.jobs[t[0]].days_till_delivery * 24 * 60, 0)
+                for t in flat_schedule
+                if t[0] != -1
+            ]
+        )
+        makespan =  max([t[-1][2] for t in schedule.values()])
+        return (total_setup_time - 110.0) / 110.0 + (tardiness - 15000) / 15000.0 + (makespan - 2880.0) / 2880.0
 
     def set_setup_times(self, setup_times: np.ndarray):
         """Sets the setup times for the problem."""
@@ -302,12 +334,10 @@ class JobShopProblem:
                 # Check if we have a preemption job
                 plot_times = [(start_time, end_time, setup_time)]
                 if end_time - start_time - setup_time > self.jobs[job_id].duration:
-                    print(f"Preemption job {job_id} on machine {machine}, start time: {start_time}, end time: {end_time}")
                     plot_times = [
                         (start_time, self.machine_worktime[machine].end_time + 24*60 * (start_time // (24*60)), setup_time),
                         (self.machine_worktime[machine].start_time + 24*60 * (end_time // (24*60)), end_time, 0)
                     ]
-                    print(plot_times)
                 for start_time, end_time, setup_time in plot_times:
                     ax.plot(
                         [start_time + setup_time, end_time],
@@ -336,7 +366,7 @@ class JobShopProblem:
                     ax.text(
                         (start_time + end_time) / 2,
                         i + 1,
-                        self.jobs[job_id].production_order_nr + f" ({job_id})",
+                        self.jobs[job_id].production_order_nr ,#+ f" ({job_id})",
                         va="center",
                         ha="right",
                         fontsize=11,
@@ -385,8 +415,10 @@ class JobShopProblem:
 
 
 class ObjectiveFunction(Enum):
+    CUSTOM_OBJECTIVE = 0
     MAKESPAN = 1
     MAXIMUM_LATENESS = 2
+    TOTAL_SETUP_TIME = 3
 
 
 class ACO:
