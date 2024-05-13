@@ -144,6 +144,10 @@ class FullACO:
             return self.problem.jssp.makespan(path, machine_assignment)
         elif self.objective_function == ObjectiveFunction.MAXIMUM_LATENESS:
             return self.problem.jssp.maximum_lateness(path, machine_assignment)
+        elif self.objective_function == ObjectiveFunction.TOTAL_SETUP_TIME:
+            return self.problem.jssp.total_setup_time(path, machine_assignment)
+        elif self.objective_function == ObjectiveFunction.CUSTOM_OBJECTIVE:
+            return self.problem.jssp.custom_objective(path, machine_assignment)
         else:
             raise ValueError("Objective function not implemented.")
 
@@ -336,11 +340,11 @@ if __name__ == "__main__":
     machine_aco = assign_machines(machine_aco)
     aco = FullACO(
         machine_aco,
-        objective_function=ObjectiveFunction.MAXIMUM_LATENESS,
+        objective_function=ObjectiveFunction.CUSTOM_OBJECTIVE,
         verbose=True,
         n_ants=500,
         n_iter=100,
-        tau_zero=1.0 / (500.0 * 17985.0),
+        tau_zero=1.0 / (500.0 * 2),
         seed=2343235,
         beta=1,
         q_zero=0.7,
