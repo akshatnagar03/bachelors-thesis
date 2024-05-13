@@ -299,39 +299,49 @@ class JobShopProblem:
                 if job_id == -1:
                     continue
                 setup_time = self.setup_times[sch[idx - 1][0] - 1, job_id - 1]
-                ax.plot(
-                    [start_time + setup_time, end_time],
-                    [i + 1, i + 1],
-                    linewidth=50,
-                    label=self.jobs[job_id].production_order_nr,
-                    solid_capstyle="butt",
-                    color=cmap(
-                        int(self.jobs[job_id].production_order_nr.removeprefix("P"))
-                    ),
-                )
-                ax.plot(
-                    [start_time, start_time + setup_time],
-                    [i + 1, i + 1],
-                    linewidth=50,
-                    solid_capstyle="butt",
-                    color=cmap(
-                        int(self.jobs[job_id].production_order_nr.removeprefix("P"))
-                    ),
-                    alpha=0.5,
-                )
-                color = "black"
-                if end_time - self.jobs[job_id].days_till_delivery * 24 * 60 > 0:
-                    color = "red"
+                # Check if we have a preemption job
+                plot_times = [(start_time, end_time, setup_time)]
+                if end_time - start_time - setup_time > self.jobs[job_id].duration:
+                    print(f"Preemption job {job_id} on machine {machine}, start time: {start_time}, end time: {end_time}")
+                    plot_times = [
+                        (start_time, self.machine_worktime[machine].end_time + 24*60 * (start_time // (24*60)), setup_time),
+                        (self.machine_worktime[machine].start_time + 24*60 * (end_time // (24*60)), end_time, 0)
+                    ]
+                    print(plot_times)
+                for start_time, end_time, setup_time in plot_times:
+                    ax.plot(
+                        [start_time + setup_time, end_time],
+                        [i + 1, i + 1],
+                        linewidth=50,
+                        label=self.jobs[job_id].production_order_nr,
+                        solid_capstyle="butt",
+                        color=cmap(
+                            int(self.jobs[job_id].production_order_nr.removeprefix("P"))
+                        ),
+                    )
+                    ax.plot(
+                        [start_time, start_time + setup_time],
+                        [i + 1, i + 1],
+                        linewidth=50,
+                        solid_capstyle="butt",
+                        color=cmap(
+                            int(self.jobs[job_id].production_order_nr.removeprefix("P"))
+                        ),
+                        alpha=0.5,
+                    )
+                    color = "black"
+                    if end_time - self.jobs[job_id].days_till_delivery * 24 * 60 > 0:
+                        color = "red"
 
-                ax.text(
-                    (start_time + end_time) / 2,
-                    i + 1,
-                    self.jobs[job_id].production_order_nr + f" ({job_id})",
-                    va="center",
-                    ha="right",
-                    fontsize=11,
-                    color=color,
-                )
+                    ax.text(
+                        (start_time + end_time) / 2,
+                        i + 1,
+                        self.jobs[job_id].production_order_nr + f" ({job_id})",
+                        va="center",
+                        ha="right",
+                        fontsize=11,
+                        color=color,
+                    )
         flat_schedule = list()
         for val in schedule.values():
             flat_schedule.extend(val)
