@@ -276,15 +276,23 @@ class JobShopProblem:
         flat_schedule = list()
         for task in schedule.values():
             flat_schedule.extend(task)
+        
+        jobs_that_are_late = set()
+        tardiness = 0
+        for task in flat_schedule[::-1]:
+            if task[0] == -1:
+                continue
+            job = self.jobs[task[0]].production_order_nr
+            if job in jobs_that_are_late:
+                tardiness += max(task[2] - self.jobs[task[0]].days_till_delivery * 24 * 60, 0)
+            elif task[2] > self.jobs[task[0]].days_till_delivery * 24 * 60:
+                tardiness += task[2] - self.jobs[task[0]].days_till_delivery * 24 * 60
+                jobs_that_are_late.add(job)
+
         # Having max(0, x) could be beneficial because we are not interested in the earliness
-        return sum(
-            [
-                max(t[2] - self.jobs[t[0]].days_till_delivery * 24 * 60, 0)
-                for t in flat_schedule
-                if t[0] != -1
-            ]
-        )
-    
+        return tardiness    
+
+
     def total_setup_time(self, job_order: list[int], machine_assignment: list[int]) -> float:
         schedule = self.make_schedule(job_order, machine_assignment)
         total_setup_time = 0
