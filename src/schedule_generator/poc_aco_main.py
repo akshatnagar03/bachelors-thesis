@@ -339,7 +339,7 @@ if __name__ == "__main__":
         objective_function=ObjectiveFunction.MAXIMUM_LATENESS,
         verbose=True,
         n_ants=500,
-        n_iter=1000,
+        n_iter=1,
         tau_zero=1.0 / (500.0 * 17985.0),
         seed=2343235,
         beta=1,

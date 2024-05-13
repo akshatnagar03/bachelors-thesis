@@ -9,7 +9,7 @@ from typing import Self
 
 import numpy as np
 from src.production_orders import Data, Workstation, parse_data
-from src.schedule_generator.poc_aco_v2 import Job, JobShopProblem
+from src.schedule_generator.poc_aco_v2 import Job, JobShopProblem, MachineSettings
 
 
 class FullJobShopProblem:
@@ -29,9 +29,12 @@ class FullJobShopProblem:
 
     def set_workstation_workhours(self):
         machine_workhours = {
-            self.machine_key[w.name]: (
-                w.starts_at.hour * 60 + w.starts_at.minute,
-                w.stops_at.hour * 60 + w.stops_at.minute,
+            self.machine_key[w.name]: MachineSettings(
+                name=w.name,
+                machine_id=self.machine_key[w.name],
+                start_time=w.starts_at.hour * 60 + w.starts_at.minute,
+                end_time=w.stops_at.hour * 60 + w.stops_at.minute,
+                allow_preemption=(w.name.lower().startswith("bottling"))
             )
             for w in self.data.workstations
         }
