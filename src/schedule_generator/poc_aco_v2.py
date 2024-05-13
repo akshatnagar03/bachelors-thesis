@@ -244,10 +244,15 @@ class JobShopProblem:
                     start_time % DAY_IN_MINUTES + task_duration
                     > self.machine_worktime[task.machine].end_time
                 ):
-                    start_time = (
-                        self.machine_worktime[task.machine].start_time
-                        + ((start_time // DAY_IN_MINUTES) + 1) * DAY_IN_MINUTES
-                    )
+                    # If we allow for preemption then the task duration is simply added by the time inbetween the end time and start time
+                    if self.machine_worktime[task.machine].allow_preemption:
+                        task_duration += DAY_IN_MINUTES - self.machine_worktime[task.machine].end_time + self.machine_worktime[task.machine].start_time
+                    else:
+                        # Should we not allow for preemption we have to wait until the next day to start the task
+                        start_time = (
+                            self.machine_worktime[task.machine].start_time
+                            + ((start_time // DAY_IN_MINUTES) + 1) * DAY_IN_MINUTES
+                        )
 
             # End time with setup time
             end_time = start_time + task_duration
