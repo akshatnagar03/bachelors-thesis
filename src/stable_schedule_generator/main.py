@@ -25,6 +25,8 @@ class Machine(BaseModel):
 
 class ScheduleError(Exception):...
 
+schedule = dict[int, list[tuple[int, int, int]]]
+
 class JobShopProblem:
     def __init__(self, data: Data, jobs: list[Job], machines: list[Machine]) -> None:
         self.data: Data = data
@@ -150,7 +152,7 @@ class JobShopProblem:
 
         return jssp
 
-    def make_schedule(self, job_order: list[int], machine_assignment: list[int]):
+    def make_schedule(self, job_order: list[int], machine_assignment: list[int]) -> schedule:
         """Create a schedule based on a give job order and machine assignment.
 
         Note that the job_order is relative, and machine_assignment is absolute. That means that
@@ -224,6 +226,16 @@ class JobShopProblem:
 
         return schedule
 
+    def makespan(self, schedule: schedule) -> int:
+        """Calculate the makespan of the schedule.
+
+        Args:
+            schedule (schedule): the schedule that should be evaluated
+
+        Returns:
+            int: the makespan of the schedule
+        """
+        return max([task[2] for machine in schedule.values() for task in machine])
 
 
 class ObjectiveFunction(Enum):
