@@ -170,8 +170,7 @@ class TwoStageACO:
             path.append(next_move)
             # Update pheromones
             self.pheromones_stage_two[current + 1, next_move + 1] = (
-                self.pheromones_stage_two[current + 1, next_move + 1]
-                * (1 - self.rho)
+                self.pheromones_stage_two[current + 1, next_move + 1] * (1 - self.rho)
                 + self.tau_zero * self.rho
             )
             current = next_move
@@ -180,7 +179,6 @@ class TwoStageACO:
                 n for n in self.problem.graph.successors(current) if n >= 0
             ]
             valid_moves.extend(new_valid_moves)
-
 
         return machine_assignment, path
 
@@ -213,11 +211,12 @@ class TwoStageACO:
             print("Got stop signal, stopping early...")
             print(f"{self.best_solution=}")
 
+
 if __name__ == "__main__":
     data = parse_data("examples/data_v1.xlsx")
     jssp = JobShopProblem.from_data(data)
     start_time = time.time()
-    aco = TwoStageACO(jssp, ObjectiveFunction.TARDINESS, verbose=True, n_iter=1000)
+    aco = TwoStageACO(jssp, ObjectiveFunction.MAKESPAN, verbose=True, n_iter=10)
     aco.run()
     print(aco.best_solution)
     print(f"Time taken: {time.time() - start_time}")
