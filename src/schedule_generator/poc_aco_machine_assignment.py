@@ -125,7 +125,7 @@ class FullJobShopProblem:
                 # first consider the mixing line
                 sub_jobs.append(
                     Job(
-                        duration=-1,
+                        duration=60,
                         machine=-1,
                         dependencies=list(),
                         product_id=order.product_id,
@@ -148,7 +148,7 @@ class FullJobShopProblem:
                 # then consider the bottling line
                 sub_jobs.append(
                     Job(
-                        duration=-1,
+                        duration=size_of_job * 0.06,
                         machine=-1,
                         dependencies=[job_counter - 1],
                         product_id=order.product_id,

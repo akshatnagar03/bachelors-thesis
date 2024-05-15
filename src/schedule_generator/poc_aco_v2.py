@@ -44,10 +44,6 @@ class Job(BaseModel):
     task_id: int
     job_id: Any
 
-    def assign_machine(self, machine: int):
-        self.machine = machine
-        self.duration = self.available_machines[machine]
-
 
 class MachineSettings(BaseModel):
     """Settings for the machines in the JSSP."""
@@ -191,16 +187,17 @@ class JobShopProblem:
                 schedule[machine][0] = (-1, 0, settings.start_time)
 
         job_schedule = dict()
-        if machine_assignment:
-            for idx, machine in enumerate(machine_assignment):
-                self.jobs[idx + 1].assign_machine(machine)
+        # if machine_assignment:
+        #     for idx, machine in enumerate(machine_assignment):
+        #         self.jobs[idx + 1].assign_machine(machine)
 
         # Iterate (in order) over the job order and schedule the tasks
         for task_idx in job_order:
             task: Job = self.jobs[task_idx]
             relevant_tasks = list()
+            machine = machine_assignment[task_idx - 1] if machine_assignment else task.machine
             # The latest job on the same machine is always relevant
-            latest_job_on_same_machine = schedule[task.machine][-1]
+            latest_job_on_same_machine = schedule[machine][-1]
             relevant_tasks.append(latest_job_on_same_machine)
 
             # If we have dependencies we need to add them to the relevant tasks
@@ -224,7 +221,7 @@ class JobShopProblem:
             DAY_IN_MINUTES = 24 * 60
 
             task_duration = (
-                task.duration
+                self.jobs[task_idx].duration
                 + self.setup_times[latest_job_on_same_machine[0] - 1, task_idx - 1]
             )
 
@@ -232,32 +229,32 @@ class JobShopProblem:
                 # If the task is supposed to start before the machine start time, we wait until the machine is ready
                 if (
                     start_time % DAY_IN_MINUTES
-                    < self.machine_worktime[task.machine].start_time
+                    < self.machine_worktime[machine].start_time
                 ):
                     start_time = (
-                        self.machine_worktime[task.machine].start_time
+                        self.machine_worktime[machine].start_time
                         + (start_time // DAY_IN_MINUTES) * DAY_IN_MINUTES
                     )
 
                 # If the task ends after the machine end time, we wait until the next day
                 if (
                     start_time % DAY_IN_MINUTES + task_duration
-                    > self.machine_worktime[task.machine].end_time
+                    > self.machine_worktime[machine].end_time
                 ):
                     # If we allow for preemption then the task duration is simply added by the time inbetween the end time and start time
-                    if self.machine_worktime[task.machine].allow_preemption:
-                        task_duration += DAY_IN_MINUTES - self.machine_worktime[task.machine].end_time + self.machine_worktime[task.machine].start_time
+                    if self.machine_worktime[machine].allow_preemption:
+                        task_duration += DAY_IN_MINUTES - self.machine_worktime[machine].end_time + self.machine_worktime[machine].start_time
                     else:
                         # Should we not allow for preemption we have to wait until the next day to start the task
                         start_time = (
-                            self.machine_worktime[task.machine].start_time
+                            self.machine_worktime[machine].start_time
                             + ((start_time // DAY_IN_MINUTES) + 1) * DAY_IN_MINUTES
                         )
 
             # End time with setup time
             end_time = start_time + task_duration
-            schedule[task.machine].append((task_idx, start_time, end_time))
-            job_schedule[task_idx] = (task.machine, start_time, end_time)
+            schedule[machine].append((task_idx, start_time, end_time))
+            job_schedule[task_idx] = (machine, start_time, end_time)
 
         return schedule
 
@@ -291,7 +288,6 @@ class JobShopProblem:
 
         # Having max(0, x) could be beneficial because we are not interested in the earliness
         return tardiness    
-
 
     def total_setup_time(self, job_order: list[int], machine_assignment: list[int]) -> float:
         schedule = self.make_schedule(job_order, machine_assignment)
@@ -388,7 +384,7 @@ class JobShopProblem:
         day_markers = np.arange(0, max_time, 24 * 60)
         day_labels = [f"{d//24//60}" for d in day_markers]
 
-        plt.xticks(ticks=np.concatenate([day_markers]), labels=day_labels)
+        # plt.xticks(ticks=np.concatenate([day_markers]), labels=day_labels)
         plt.yticks(
             ticks=np.arange(1, len(schedule) + 1),
             labels=[f"Machine {m}" for m in schedule.keys()],

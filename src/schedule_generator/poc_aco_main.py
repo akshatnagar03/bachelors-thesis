@@ -58,14 +58,6 @@ def from_assigned_machine_to_jssp(aco_machine: FullJobShopProblem) -> JobShopPro
     jssp.set_setup_times(setup_times)
     return jssp
 
-
-def assign_machines(aco_machine: FullJobShopProblem) -> FullJobShopProblem:
-    for sub_job in aco_machine.sub_jobs:
-        to_assign = list(sub_job.available_machines.keys())[0]
-        sub_job.assign_machine(to_assign)
-    return aco_machine
-
-
 class FullACO:
     def __init__(
         self,
@@ -337,23 +329,23 @@ if __name__ == "__main__":
     # BKS (lateness w/ no earliness bonus + machine hours): 16800
     data = parse_data("examples/data_v1.xlsx")
     machine_aco = FullJobShopProblem.from_data(data)
-    machine_aco = assign_machines(machine_aco)
+    
     aco = FullACO(
         machine_aco,
-        objective_function=ObjectiveFunction.CUSTOM_OBJECTIVE,
+        objective_function=ObjectiveFunction.MAXIMUM_LATENESS,
         verbose=True,
         n_ants=500,
-        n_iter=100,
-        tau_zero=1.0 / (500.0 * 2),
+        n_iter=10,
+        tau_zero=1.0 / (500.0 * 17800),
         seed=2343235,
         beta=1,
         q_zero=0.7,
     )
-    aco.run()
+    # aco.run()
     print(f"{aco.best_solution=}")
+    aco.best_solution = (168000, [i+1 for i in [24, 0, 36, 2, 4, 8, 6, 12, 10, 14, 16, 18, 20, 22, 26, 28, 30, 32, 34, 38, 1, 3, 5, 7, 25, 27, 21, 23, 29, 37, 31, 33, 35, 9, 13, 11, 15, 17, 19, 39]], [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 2, 0, 2, 0, 1, 0, 2, 0, 2, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 2, 0, 2])
     schedule = aco.problem.jssp.make_schedule(
         aco.best_solution[1], aco.best_solution[2]
     )
     aco.problem.jssp.visualize_schedule(schedule)
-    plt.savefig("example.png")
     # print(jssp.makespan(solve_optimally(jssp.jobs)))
