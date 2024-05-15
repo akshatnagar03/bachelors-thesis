@@ -44,8 +44,8 @@ class Data(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     workstations: list[Workstation]
-    products: list[Product]
-    bill_of_materials: list[BillOfMaterial]
+    products: dict[int, Product]
+    bill_of_materials: dict[int, BillOfMaterial]
     production_orders: list[ProductionOrder]
     workstation_df: pd.DataFrame
     products_df: pd.DataFrame
@@ -69,11 +69,12 @@ def parse_data(path: str) -> Data:
         Workstation(**workstation)  # type: ignore
         for workstation in workstations_df.to_dict("records")
     ]
-    products = [Product(**product) for product in products_df.to_dict("records")]  # type: ignore
-    bill_of_materials = [
+    products = {product["product_id"]: Product(**product) for product in products_df.to_dict("records")}  # type: ignore
+    bill_of_materials = {
+        bom["parent_id"]:
         BillOfMaterial(**bom)  # type: ignore
         for bom in bill_of_materials_df.to_dict("records")
-    ]
+    }
     production_orders = [
         ProductionOrder(**order)  # type: ignore
         for order in production_orders_df.to_dict("records")
