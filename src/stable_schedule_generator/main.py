@@ -3,12 +3,13 @@ from typing import Any, Self
 import numpy as np
 from pydantic import BaseModel
 from src.production_orders import Data, parse_data, Product, BillOfMaterial
+import networkx as nx
 
 DAY_MINUTES = 24 * 60
 
 
 class Job(BaseModel):
-    available_machines: list[int]
+    available_machines: dict[int, int]
     dependencies: list[int]
     production_order_nr: str
     station_settings: dict[str, Any] = dict()
@@ -38,6 +39,23 @@ class JobShopProblem:
         self.jobs: list[Job] = jobs
         self.machines: list[Machine] = machines
         self.setup_times: np.ndarray = np.zeros((len(jobs), len(jobs)))
+        self.graph = self._build_graph()
+
+    def _build_graph(self) -> nx.DiGraph:
+        graph = nx.DiGraph()
+        graph.add_nodes_from([-1, -2] + [x for x in range(len(self.jobs))]) 
+        edges = list()
+        for job_idx, job in enumerate(self.jobs):
+            if len(job.dependencies) == 0:
+                edges.append((-1, job_idx))
+                continue
+            for dep in job.dependencies:
+                edges.append((dep, job_idx))
+        graph.add_edges_from(edges)
+        for node, outdegree in graph.out_degree(graph.nodes()):
+            if outdegree == 0 and node >= 0:
+                graph.add_edge(node, -2)
+        return graph
 
     @classmethod
     def from_data(cls, data: Data) -> Self:
@@ -132,7 +150,12 @@ class JobShopProblem:
 
                     sub_jobs.append(
                         Job(
-                            available_machines=prod["machines"],
+                            available_machines={
+                                m: data.workstations[m].minutes_per_run * prod["amount"]
+                                if data.workstations[m].max_units_per_run == 1
+                                else data.workstations[m].minutes_per_run
+                                for m in prod["machines"]
+                            },
                             dependencies=dependencies,
                             production_order_nr=order.production_order_nr,
                             station_settings={
@@ -152,7 +175,7 @@ class JobShopProblem:
                     continue
                 if j1.station_settings["taste"] != j2.station_settings["taste"]:
                     jssp.setup_times[j1_idx, j2_idx] += jssp.data.workstations[
-                        j1.available_machines[0]
+                        list(j1.available_machines.keys())[0]
                     ].minutes_changeover_time_taste
 
                 if (
@@ -160,7 +183,7 @@ class JobShopProblem:
                     != j2.station_settings["bottle_size"]
                 ):
                     jssp.setup_times[j1_idx, j2_idx] += jssp.data.workstations[
-                        j1.available_machines[0]
+                        list(j1.available_machines.keys())[0]
                     ].minutes_changeover_time_bottle_size
 
         return jssp
@@ -195,7 +218,6 @@ class JobShopProblem:
 
         for task_idx in job_order:
             task: Job = self.jobs[task_idx]
-            print(f"{task_idx=}, {task=}")
             machine_idx = machine_assignment[task_idx]
             if machine_idx not in task.available_machines:
                 raise ScheduleError(
@@ -223,10 +245,8 @@ class JobShopProblem:
             start_time = max([task[2] for task in relevant_task])
 
             task_duration: int = int(
-                machine.minutes_per_run * task.amount
-                if self.data.workstations[machine_idx].max_units_per_run == 1
-                else machine.minutes_per_run
-                + self.setup_times[latest_job_on_same_machine[0], task_idx]
+                task.available_machines[machine_idx]
+                +self.setup_times[latest_job_on_same_machine[0], task_idx]
             )
             # If task is schedule before the machine starts, we move it to the start time
             if start_time % DAY_MINUTES < machine.start_time:
@@ -317,4 +337,4 @@ if __name__ == "__main__":
     data = parse_data("examples/data_v1.xlsx")
     jssp = JobShopProblem.from_data(data)
     print(jssp.jobs[:3])
-    print(jssp.make_schedule([0, 2, 1], [0, 1, 0]))
+    print(jssp.make_schedule(list(range(len(jssp.jobs) - 1)), [0, 1] * (len(jssp.jobs) // 2)))
