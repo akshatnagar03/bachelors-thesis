@@ -6,6 +6,7 @@ from src.production_orders import Data, parse_data, Product, BillOfMaterial
 
 DAY_MINUTES = 24 * 60
 
+
 class Job(BaseModel):
     available_machines: list[int]
     dependencies: list[int]
@@ -24,9 +25,12 @@ class Machine(BaseModel):
     max_units_per_run: int = 1
     minutes_per_run: float
 
-class ScheduleError(Exception):...
+
+class ScheduleError(Exception): ...
+
 
 schedule_type = dict[int, list[tuple[int, int, int]]]
+
 
 class JobShopProblem:
     def __init__(self, data: Data, jobs: list[Job], machines: list[Machine]) -> None:
@@ -147,14 +151,23 @@ class JobShopProblem:
                 if j1 == j2 or j1.production_order_nr == j2.production_order_nr:
                     continue
                 if j1.station_settings["taste"] != j2.station_settings["taste"]:
-                    jssp.setup_times[j1_idx, j2_idx] += jssp.data.workstations[j1.available_machines[0]].minutes_changeover_time_taste
+                    jssp.setup_times[j1_idx, j2_idx] += jssp.data.workstations[
+                        j1.available_machines[0]
+                    ].minutes_changeover_time_taste
 
-                if j1.station_settings["bottle_size"] != j2.station_settings["bottle_size"]:
-                    jssp.setup_times[j1_idx, j2_idx] += jssp.data.workstations[j1.available_machines[0]].minutes_changeover_time_bottle_size
+                if (
+                    j1.station_settings["bottle_size"]
+                    != j2.station_settings["bottle_size"]
+                ):
+                    jssp.setup_times[j1_idx, j2_idx] += jssp.data.workstations[
+                        j1.available_machines[0]
+                    ].minutes_changeover_time_bottle_size
 
         return jssp
 
-    def make_schedule(self, job_order: list[int], machine_assignment: list[int]) -> schedule_type:
+    def make_schedule(
+        self, job_order: list[int], machine_assignment: list[int]
+    ) -> schedule_type:
         """Create a schedule based on a give job order and machine assignment.
 
         Note that the job_order is relative, and machine_assignment is absolute. That means that
@@ -185,7 +198,9 @@ class JobShopProblem:
             print(f"{task_idx=}, {task=}")
             machine_idx = machine_assignment[task_idx]
             if machine_idx not in task.available_machines:
-                raise ScheduleError(f"Machine {machine_idx} not available for task {task_idx}")
+                raise ScheduleError(
+                    f"Machine {machine_idx} not available for task {task_idx}"
+                )
             machine = self.machines[machine_idx]
 
             relevant_task: list[tuple[int, int, int]] = list()
@@ -200,18 +215,24 @@ class JobShopProblem:
                     if dep_task := job_schedule.get(dep, None):
                         relevant_task.append(dep_task)
                     else:
-                        raise ScheduleError(f"Dependency {dep} not scheduled before {task_idx}")
-                
+                        raise ScheduleError(
+                            f"Dependency {dep} not scheduled before {task_idx}"
+                        )
+
             # Get the start time of the task
             start_time = max([task[2] for task in relevant_task])
 
             task_duration: int = int(
-                machine.minutes_per_run * task.amount if self.data.workstations[machine_idx].max_units_per_run == 1 else machine.minutes_per_run
+                machine.minutes_per_run * task.amount
+                if self.data.workstations[machine_idx].max_units_per_run == 1
+                else machine.minutes_per_run
                 + self.setup_times[latest_job_on_same_machine[0], task_idx]
             )
             # If task is schedule before the machine starts, we move it to the start time
             if start_time % DAY_MINUTES < machine.start_time:
-                start_time = machine.start_time + (start_time // DAY_MINUTES) * DAY_MINUTES
+                start_time = (
+                    machine.start_time + (start_time // DAY_MINUTES) * DAY_MINUTES
+                )
 
             # If the task ends after the machine stops, we move it to the next day, unless we allow preemption.
             # If we allow preemption we will just continue with the work the next day
@@ -220,7 +241,10 @@ class JobShopProblem:
                 if machine.allow_preemption:
                     task_duration += DAY_MINUTES - machine.end_time + machine.start_time
                 else:
-                    start_time = machine.start_time + (start_time // DAY_MINUTES + 1) * DAY_MINUTES
+                    start_time = (
+                        machine.start_time
+                        + (start_time // DAY_MINUTES + 1) * DAY_MINUTES
+                    )
 
             end_time = start_time + task_duration
             schedule[machine_idx].append((task_idx, start_time, end_time))
@@ -250,10 +274,14 @@ class JobShopProblem:
         Returns:
             int: the tardiness of the schedule
         """
-        production_order_lateness = {order.production_order_nr: [] for order in self.data.production_orders}
+        production_order_lateness = {
+            order.production_order_nr: [] for order in self.data.production_orders
+        }
         for machine in schedule.values():
             for task in machine:
-                production_order_lateness[self.jobs[task[0]].production_order_nr].append(task[2] - self.jobs[task[0]].days_till_delivery * DAY_MINUTES)
+                production_order_lateness[
+                    self.jobs[task[0]].production_order_nr
+                ].append(task[2] - self.jobs[task[0]].days_till_delivery * DAY_MINUTES)
 
         tardiness = 0
         for lateness in production_order_lateness.values():
@@ -277,6 +305,7 @@ class JobShopProblem:
                     setup_time += self.setup_times[machine[idx - 1][0], task[0]]
         return setup_time
 
+
 class ObjectiveFunction(Enum):
     CUSTOM_OBJECTIVE = 0
     MAKESPAN = 1
@@ -288,4 +317,4 @@ if __name__ == "__main__":
     data = parse_data("examples/data_v1.xlsx")
     jssp = JobShopProblem.from_data(data)
     print(jssp.jobs[:3])
-    print(jssp.make_schedule([0,2,1], [0, 1, 0]))
+    print(jssp.make_schedule([0, 2, 1], [0, 1, 0]))
