@@ -156,6 +156,22 @@ class TwoStageACO:
             assignment.append(np.random.choice(available_machines, p=probabilities))
         return assignment
 
+    def local_search(self, machine_assignment: list[int], path: list[int]):
+        # Try to swap a machine for a job
+        new_machine_assignment = machine_assignment.copy()
+        for _ in range(1):
+            job_idx = np.random.randint(len(path))
+            while len(self.problem.jobs[job_idx].available_machines) == 1:
+                job_idx = np.random.randint(len(path))
+            job = self.problem.jobs[job_idx]
+            machine_idx = np.random.choice(list(job.available_machines.keys()))
+            new_machine_assignment[job_idx] = machine_idx
+        new_objective_value = self.evaluate(new_machine_assignment, path)
+        if new_objective_value < self.best_solution[0]:
+            self.best_solution = (new_objective_value, new_machine_assignment, path)
+            if self.verbose:
+                print(f"New best solution found (in ls): {self.best_solution[0]}")
+
     def run_ant(self) -> tuple[list[int], list[int]]:
         path = list()
         machine_assignment = self.assign_machines()
@@ -180,6 +196,8 @@ class TwoStageACO:
             ]
             valid_moves.extend(new_valid_moves)
 
+        self.local_search(machine_assignment, path)
+
         return machine_assignment, path
 
     def run_and_update_ant(self) -> tuple[float, list[int], list[int]]:
@@ -188,6 +206,9 @@ class TwoStageACO:
             machine_assignment=machine_assignment, path=path
         )
         if objective_value < self.best_solution[0]:
+            if objective_value == 0:
+                print("Found optimal solution (0), stopping early...")
+                raise KeyboardInterrupt
             self.best_solution = (objective_value, machine_assignment, path)
             if self.verbose:
                 print(f"New best solution found: {self.best_solution[0]}")
@@ -216,7 +237,7 @@ if __name__ == "__main__":
     data = parse_data("examples/data_v1.xlsx")
     jssp = JobShopProblem.from_data(data)
     start_time = time.time()
-    aco = TwoStageACO(jssp, ObjectiveFunction.MAKESPAN, verbose=True, n_iter=10)
+    aco = TwoStageACO(jssp, ObjectiveFunction.TARDINESS, verbose=True, n_iter=100, tau_zero=1.0 / (500*16000.0))
     aco.run()
     print(aco.best_solution)
     print(f"Time taken: {time.time() - start_time}")
