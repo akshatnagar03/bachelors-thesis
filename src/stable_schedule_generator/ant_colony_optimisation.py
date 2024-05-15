@@ -168,12 +168,19 @@ class TwoStageACO:
         while len(path) != len(self.problem.jobs):
             next_move = self.draw_transition(current, valid_moves, machine_assignment)
             path.append(next_move)
+            # Update pheromones
+            self.pheromones_stage_two[current + 1, next_move + 1] = (
+                self.pheromones_stage_two[current + 1, next_move + 1]
+                * (1 - self.rho)
+                + self.tau_zero * self.rho
+            )
             current = next_move
             valid_moves.remove(next_move)
             new_valid_moves = [
                 n for n in self.problem.graph.successors(current) if n >= 0
             ]
             valid_moves.extend(new_valid_moves)
+
 
         return machine_assignment, path
 
@@ -189,25 +196,31 @@ class TwoStageACO:
         return objective_value, machine_assignment, path
 
     def run(self):
-        for gen in range(self.n_iter):
-            for _ in range(self.n_ants):
-                self.run_and_update_ant()
-            if self.verbose:
-                print(f"Generation {gen}, best objective value: {self.best_solution[0]}")
-            elif gen % 10 == 0:
-                print(f"Generation {gen}, best objective value: {self.best_solution[0]}")
-            self.global_update_pheromones()
-        
+        try:
+            for gen in range(self.n_iter):
+                for _ in range(self.n_ants):
+                    self.run_and_update_ant()
+                if self.verbose:
+                    print(
+                        f"Generation {gen}, best objective value: {self.best_solution[0]}"
+                    )
+                elif gen % 10 == 0:
+                    print(
+                        f"Generation {gen}, best objective value: {self.best_solution[0]}"
+                    )
+                self.global_update_pheromones()
+        except KeyboardInterrupt:
+            print("Got stop signal, stopping early...")
+            print(f"{self.best_solution=}")
+
 if __name__ == "__main__":
     data = parse_data("examples/data_v1.xlsx")
     jssp = JobShopProblem.from_data(data)
     start_time = time.time()
-    aco = TwoStageACO(
-        jssp,
-        ObjectiveFunction.TARDINESS,
-        verbose=True,
-        n_iter=10
-    )
+    aco = TwoStageACO(jssp, ObjectiveFunction.TARDINESS, verbose=True, n_iter=1000)
     aco.run()
     print(aco.best_solution)
-    print(f"Time taken: {time.time() - start_time}") 
+    print(f"Time taken: {time.time() - start_time}")
+    aco.problem.visualize_schedule(
+        aco.problem.make_schedule(aco.best_solution[2], aco.best_solution[1])
+    )
