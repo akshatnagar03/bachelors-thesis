@@ -4,6 +4,7 @@ import numpy as np
 from pydantic import BaseModel
 from src.production_orders import Data, parse_data, Product, BillOfMaterial
 import networkx as nx
+import matplotlib.pyplot as plt
 
 DAY_MINUTES = 24 * 60
 
@@ -56,6 +57,99 @@ class JobShopProblem:
             if outdegree == 0 and node >= 0:
                 graph.add_edge(node, -2)
         return graph
+
+    def visualize_schedule(self, schedule: dict[int, list[tuple[int, int, int]]]):
+        """Visualizes a schedule."""
+        fig, ax = plt.subplots(figsize=(13, 7))
+        cmap = plt.get_cmap("tab20")
+        for i, (machine, sch) in enumerate(schedule.items()):
+            for idx, task in enumerate(sch):
+                job_id, start_time, end_time = task
+                if job_id == -1:
+                    continue
+                setup_time = self.setup_times[sch[idx - 1][0] - 1, job_id - 1]
+                # Check if we have a preemption job
+                plot_times = [(start_time, end_time, setup_time)]
+                if end_time - start_time - setup_time > self.jobs[job_id].available_machines[machine]:
+                    plot_times = [
+                        (start_time, self.machines[machine].end_time + 24*60 * (start_time // (24*60)), setup_time),
+                        (self.machines[machine].start_time + 24*60 * (end_time // (24*60)), end_time, 0)
+                    ]
+                for start_time, end_time, setup_time in plot_times:
+                    ax.plot(
+                        [start_time + setup_time, end_time],
+                        [i + 1, i + 1],
+                        linewidth=50,
+                        label=self.jobs[job_id].production_order_nr,
+                        solid_capstyle="butt",
+                        color=cmap(
+                            int(self.jobs[job_id].production_order_nr.removeprefix("P"))
+                        ),
+                    )
+                    ax.plot(
+                        [start_time, start_time + setup_time],
+                        [i + 1, i + 1],
+                        linewidth=50,
+                        solid_capstyle="butt",
+                        color=cmap(
+                            int(self.jobs[job_id].production_order_nr.removeprefix("P"))
+                        ),
+                        alpha=0.5,
+                    )
+                    color = "black"
+                    if end_time - self.jobs[job_id].days_till_delivery * 24 * 60 > 0:
+                        color = "red"
+
+                    ax.text(
+                        (start_time + end_time) / 2,
+                        i + 1,
+                        self.jobs[job_id].production_order_nr ,#+ f" ({job_id})",
+                        va="center",
+                        ha="right",
+                        fontsize=11,
+                        color=color,
+                    )
+        flat_schedule = list()
+        for val in schedule.values():
+            flat_schedule.extend(val)
+        max_time = max([t[2] for t in flat_schedule])
+
+        day_markers = np.arange(0, max_time, 24 * 60)
+        day_labels = [f"{d//24//60}" for d in day_markers]
+
+        plt.xticks(ticks=np.concatenate([day_markers]), labels=day_labels)
+        plt.yticks(
+            ticks=np.arange(1, len(schedule) + 1),
+            labels=[f"Machine {m}" for m in schedule.keys()],
+        )
+        plt.xlabel("Days")
+        plt.ylabel("Machine")
+        plt.tight_layout()
+
+        for machine in self.machines:
+            x_lines_start = np.arange(
+                machine.start_time, max_time, 24 * 60
+            )
+            plt.vlines(
+                x_lines_start,
+                machine.machine_id + 0.5,
+                machine.machine_id + 1.5,
+                linestyles="dashed",
+                color="green",
+            )
+            x_lines_end = np.arange(
+                machine.end_time, max_time, 24 * 60
+            )
+            plt.vlines(
+                x_lines_end,
+                machine.machine_id + 0.5,
+                machine.machine_id + 1.5,
+                linestyles="dashed",
+                color="red",
+            )
+
+        plt.show()
+
 
     @classmethod
     def from_data(cls, data: Data) -> Self:
@@ -331,10 +425,3 @@ class ObjectiveFunction(Enum):
     MAKESPAN = 1
     TARDINESS = 2
     TOTAL_SETUP_TIME = 3
-
-
-if __name__ == "__main__":
-    data = parse_data("examples/data_v1.xlsx")
-    jssp = JobShopProblem.from_data(data)
-    print(jssp.jobs[:3])
-    print(jssp.make_schedule(list(range(len(jssp.jobs) - 1)), [0, 1] * (len(jssp.jobs) // 2)))
