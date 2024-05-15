@@ -223,7 +223,7 @@ class JobShopProblem:
                 min_max_units_per_run = min(
                     [machines[m].max_units_per_run for m in prod_info["machines"]]
                 )
-                prod_info["batches"] = int(amount // min_max_units_per_run)
+                prod_info["batches"] = max(int(amount // min_max_units_per_run), 1)
                 prod_info["batches_amount"] = min_max_units_per_run
                 remainder = int(amount % min_max_units_per_run)
                 prod_info["batches_remainder"] = (
