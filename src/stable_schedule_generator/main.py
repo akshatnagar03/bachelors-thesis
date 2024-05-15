@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Any, Self
 import numpy as np
 from pydantic import BaseModel
-from src.production_orders import Data, parse_data, Product, BillOfMaterial
+from src.production_orders import Data, Product, BillOfMaterial
 import networkx as nx
 import matplotlib.pyplot as plt
 
@@ -44,7 +44,7 @@ class JobShopProblem:
 
     def _build_graph(self) -> nx.DiGraph:
         graph = nx.DiGraph()
-        graph.add_nodes_from([-1, -2] + [x for x in range(len(self.jobs))]) 
+        graph.add_nodes_from([-1, -2] + [x for x in range(len(self.jobs))])
         edges = list()
         for job_idx, job in enumerate(self.jobs):
             if len(job.dependencies) == 0:
@@ -67,13 +67,26 @@ class JobShopProblem:
                 job_id, start_time, end_time = task
                 if job_id == -1:
                     continue
-                setup_time = self.setup_times[sch[idx - 1][0] - 1, job_id - 1]
+                setup_time = self.setup_times[sch[idx - 1][0], job_id]
                 # Check if we have a preemption job
                 plot_times = [(start_time, end_time, setup_time)]
-                if end_time - start_time - setup_time > self.jobs[job_id].available_machines[machine]:
+                if (
+                    end_time - start_time - setup_time
+                    > self.jobs[job_id].available_machines[machine]
+                ):
                     plot_times = [
-                        (start_time, self.machines[machine].end_time + 24*60 * (start_time // (24*60)), setup_time),
-                        (self.machines[machine].start_time + 24*60 * (end_time // (24*60)), end_time, 0)
+                        (
+                            start_time,
+                            self.machines[machine].end_time
+                            + 24 * 60 * (start_time // (24 * 60)),
+                            setup_time,
+                        ),
+                        (
+                            self.machines[machine].start_time
+                            + 24 * 60 * (end_time // (24 * 60)),
+                            end_time,
+                            0,
+                        ),
                     ]
                 for start_time, end_time, setup_time in plot_times:
                     ax.plot(
@@ -103,7 +116,7 @@ class JobShopProblem:
                     ax.text(
                         (start_time + end_time) / 2,
                         i + 1,
-                        self.jobs[job_id].production_order_nr ,#+ f" ({job_id})",
+                        self.jobs[job_id].production_order_nr,  # + f" ({job_id})",
                         va="center",
                         ha="right",
                         fontsize=11,
@@ -127,9 +140,7 @@ class JobShopProblem:
         plt.tight_layout()
 
         for machine in self.machines:
-            x_lines_start = np.arange(
-                machine.start_time, max_time, 24 * 60
-            )
+            x_lines_start = np.arange(machine.start_time, max_time, 24 * 60)
             plt.vlines(
                 x_lines_start,
                 machine.machine_id + 0.5,
@@ -137,9 +148,7 @@ class JobShopProblem:
                 linestyles="dashed",
                 color="green",
             )
-            x_lines_end = np.arange(
-                machine.end_time, max_time, 24 * 60
-            )
+            x_lines_end = np.arange(machine.end_time, max_time, 24 * 60)
             plt.vlines(
                 x_lines_end,
                 machine.machine_id + 0.5,
@@ -149,7 +158,6 @@ class JobShopProblem:
             )
 
         plt.show()
-
 
     @classmethod
     def from_data(cls, data: Data) -> Self:
@@ -245,7 +253,7 @@ class JobShopProblem:
                     sub_jobs.append(
                         Job(
                             available_machines={
-                                m: data.workstations[m].minutes_per_run * prod["amount"]
+                                m: data.workstations[m].minutes_per_run * amount
                                 if data.workstations[m].max_units_per_run == 1
                                 else data.workstations[m].minutes_per_run
                                 for m in prod["machines"]
@@ -340,7 +348,7 @@ class JobShopProblem:
 
             task_duration: int = int(
                 task.available_machines[machine_idx]
-                +self.setup_times[latest_job_on_same_machine[0], task_idx]
+                + self.setup_times[latest_job_on_same_machine[0], task_idx]
             )
             # If task is schedule before the machine starts, we move it to the start time
             if start_time % DAY_MINUTES < machine.start_time:
