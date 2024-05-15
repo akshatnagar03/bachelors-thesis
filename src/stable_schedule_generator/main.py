@@ -12,6 +12,7 @@ class Job(BaseModel):
     production_order_nr: str
     station_settings: dict[str, Any] = dict()
     amount: int = 1
+    days_till_delivery: int = 0
 
 
 class Machine(BaseModel):
@@ -25,7 +26,7 @@ class Machine(BaseModel):
 
 class ScheduleError(Exception):...
 
-schedule = dict[int, list[tuple[int, int, int]]]
+schedule_type = dict[int, list[tuple[int, int, int]]]
 
 class JobShopProblem:
     def __init__(self, data: Data, jobs: list[Job], machines: list[Machine]) -> None:
@@ -135,6 +136,7 @@ class JobShopProblem:
                                 "bottle_size": products[idx][0].setting_bottle_size,
                             },
                             amount=amount,
+                            days_till_delivery=order.days_till_delivery,
                         )
                     )
         jssp = cls(data=data, jobs=sub_jobs, machines=machines)
@@ -152,7 +154,7 @@ class JobShopProblem:
 
         return jssp
 
-    def make_schedule(self, job_order: list[int], machine_assignment: list[int]) -> schedule:
+    def make_schedule(self, job_order: list[int], machine_assignment: list[int]) -> schedule_type:
         """Create a schedule based on a give job order and machine assignment.
 
         Note that the job_order is relative, and machine_assignment is absolute. That means that
@@ -226,7 +228,7 @@ class JobShopProblem:
 
         return schedule
 
-    def makespan(self, schedule: schedule) -> int:
+    def makespan(self, schedule: schedule_type) -> int:
         """Calculate the makespan of the schedule.
 
         Args:
@@ -237,11 +239,48 @@ class JobShopProblem:
         """
         return max([task[2] for machine in schedule.values() for task in machine])
 
+    def tardiness(self, schedule: schedule_type) -> int:
+        """Calculate the tardiness of the schedule. The tardiness is the number of sub jobs that are late.
+
+        As soon as just 1 sub job is late the whole order is late, and should be penalized.
+
+        Args:
+            schedule (schedule): the schedule that should be evaluated
+
+        Returns:
+            int: the tardiness of the schedule
+        """
+        production_order_lateness = {order.production_order_nr: [] for order in self.data.production_orders}
+        for machine in schedule.values():
+            for task in machine:
+                production_order_lateness[self.jobs[task[0]].production_order_nr].append(task[2] - self.jobs[task[0]].days_till_delivery * DAY_MINUTES)
+
+        tardiness = 0
+        for lateness in production_order_lateness.values():
+            if any([l > 0 for l in lateness]):
+                tardiness += np.sum(lateness)
+        return tardiness
+
+    def total_setup_time(self, schedule: schedule_type) -> int:
+        """Calculate the total setup time of the schedule.
+
+        Args:
+            schedule (schedule): the schedule that should be evaluated
+
+        Returns:
+            int: the total setup time of the schedule
+        """
+        setup_time = 0
+        for machine in schedule.values():
+            for idx, task in enumerate(machine):
+                if idx > 0:
+                    setup_time += self.setup_times[machine[idx - 1][0], task[0]]
+        return setup_time
 
 class ObjectiveFunction(Enum):
     CUSTOM_OBJECTIVE = 0
     MAKESPAN = 1
-    MAXIMUM_LATENESS = 2
+    TARDINESS = 2
     TOTAL_SETUP_TIME = 3
 
 
