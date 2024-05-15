@@ -403,13 +403,13 @@ class JobShopProblem:
             for task in machine:
                 production_order_lateness[
                     self.jobs[task[0]].production_order_nr
-                ].append(task[2] - self.jobs[task[0]].days_till_delivery * DAY_MINUTES)
+                ].append(max(task[2] - self.jobs[task[0]].days_till_delivery * DAY_MINUTES, 0))
 
         tardiness = 0
         for lateness in production_order_lateness.values():
             if any([l > 0 for l in lateness]):
-                tardiness += np.sum(lateness)
-        return tardiness
+                tardiness += np.average(lateness) * len(lateness)
+        return int(tardiness)
 
     def total_setup_time(self, schedule: schedule_type) -> int:
         """Calculate the total setup time of the schedule.
