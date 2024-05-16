@@ -19,6 +19,7 @@ class TwoStageACO:
         q_zero: float = 0.9,
         tau_zero: float = 1.0,
         verbose: bool = False,
+        with_stock_schedule: bool = False,
     ) -> None:
         """Initializes the two-stage ACO algorithm.
 
@@ -70,10 +71,14 @@ class TwoStageACO:
             * tau_zero
         )
         self.best_solution: tuple[float, list[list[int]]] = (1e100, list(list()))
+        self.with_stock_schedule = with_stock_schedule
 
     def evaluate(self, parallel_schedule: list[list[int]]) -> float:
         """Evaluates the path and machine assignment."""
-        schedule = self.problem.make_schedule_from_parallel(parallel_schedule)
+        if self.with_stock_schedule:
+            schedule = self.problem.make_schedule_from_parallel_with_stock(parallel_schedule)
+        else:
+            schedule = self.problem.make_schedule_from_parallel(parallel_schedule)
         if self.objective_function == ObjectiveFunction.MAKESPAN:
             return self.problem.makespan(schedule)
         elif self.objective_function == ObjectiveFunction.TARDINESS:
@@ -182,7 +187,7 @@ class TwoStageACO:
 
     def local_search(self, schedule: list[list[int]]) -> tuple[float, list[list[int]]]:
         x = np.random.rand()
-        if x < 0.25:
+        if x < 0.00:
             machine = np.random.randint(len(self.problem.machines))
             # sort the jobs by their order_id
             schedule[machine] = sorted(
@@ -262,16 +267,17 @@ if __name__ == "__main__":
     start_time = time.time()
     aco = TwoStageACO(
         jssp,
-        ObjectiveFunction.BOOLEAN_TARDINESS,
+        ObjectiveFunction.TOTAL_SETUP_TIME,
         verbose=True,
-        n_iter=50,
+        n_iter=100,
         n_ants=500,
-        tau_zero=1.0 / (500 * 26507.0),
+        tau_zero=1.0 / (500 * 225.0),
         q_zero=0.85,
+        with_stock_schedule=True
     )
     aco.run()
     print(aco.best_solution)
     print(f"Time taken: {time.time() - start_time}")
     aco.problem.visualize_schedule(
-        aco.problem.make_schedule_from_parallel(aco.best_solution[1])
+        aco.problem.make_schedule_from_parallel_with_stock(aco.best_solution[1])
     )
