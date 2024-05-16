@@ -436,7 +436,9 @@ class JobShopProblem:
                 if start_time % DAY_MINUTES + task_duration > machine.end_time:
                     # If we allow for preemption we will just add to the duration the time inbetween start and end time
                     if machine.allow_preemption:
-                        task_duration += DAY_MINUTES - machine.end_time + machine.start_time
+                        task_duration += (
+                            DAY_MINUTES - machine.end_time + machine.start_time
+                        )
                     else:
                         start_time = (
                             machine.start_time
@@ -446,6 +448,107 @@ class JobShopProblem:
                 end_time = start_time + task_duration
                 schedule[machine_idx].append((task_idx, start_time, end_time))
                 job_schedule[task_idx] = (machine_idx, start_time, end_time)
+
+        return schedule
+
+    def make_schedule_from_parallel_with_stock(
+        self, job_orders: list[list[int]]
+    ) -> schedule_type:
+        schedule: dict[int, list[tuple[int, int, int]]] = {
+            m.machine_id: [(-1, 0, m.start_time)] for m in self.machines
+        }
+        # Contains the machine stock for each machine the tuple
+        # is the hf stock and the amount (hf_id, amount, release_time)
+        stock: list[tuple[str, int, int]] = [("", 0, 0)]
+        stock_used: list[tuple[str, int, int]] = [("", 0, 0)]
+        for machine_idx, order in enumerate(job_orders):
+            for task_idx in order:
+                if task_idx == -1:
+                    continue
+                task: Job = self.jobs[task_idx]
+                if machine_idx not in task.available_machines:
+                    raise ScheduleError(
+                        f"Machine {machine_idx} not available for task {task_idx}"
+                    )
+                machine = self.machines[machine_idx]
+
+                relevant_task: list[tuple[int, int, int]] = list()
+
+                # Get the last job on the same machine
+                latest_job_on_same_machine = schedule[machine_idx][-1]
+                relevant_task.append(latest_job_on_same_machine)
+
+                # Get the start time of the task
+                start_time = max([task[2] for task in relevant_task])
+
+                # We wait until we have enough stock to start the task
+                if machine.name.lower().startswith("bot"):
+                    # Get the stock available at the start time
+                    stock_available_at_start_time = 0
+                    counted_stock_till = 0
+                    for idx, s in enumerate(stock):
+                        if s[2] > start_time:
+                            counted_stock_till = idx
+                            break
+                        stock_available_at_start_time += s[1]
+                        if idx == len(stock) - 1:
+                            counted_stock_till = idx
+                    for s in stock_used:
+                        if s[2] > start_time:
+                            continue
+                        stock_available_at_start_time -= s[1]
+                    # If we have enough stock we add the stock used, and continue with buidling schedule
+                    if stock_available_at_start_time >= task.amount:
+                        stock_used.append(
+                            (task.station_settings["taste"], task.amount, start_time)
+                        )
+
+                    else:
+                        # Get the hf_id
+                        hf_id = task.station_settings["taste"]
+                        new_start_time = start_time
+                        while stock_available_at_start_time < task.amount:
+                            # Get the next stock that is available
+                            next_stock_update = stock[counted_stock_till + 1]
+                            for s in stock_used:
+                                if s[2] > new_start_time and s[2] < next_stock_update[2]:
+                                    stock_available_at_start_time -= s[1]
+                            new_start_time = next_stock_update[2]
+                            stock_available_at_start_time += next_stock_update[1]
+                            counted_stock_till += 1
+
+                        start_time = new_start_time
+
+                task_duration: int = int(
+                    task.available_machines[machine_idx]
+                    + self.setup_times[latest_job_on_same_machine[0], task_idx]
+                )
+                # If task is schedule before the machine starts, we move it to the start time
+                if start_time % DAY_MINUTES < machine.start_time:
+                    start_time = (
+                        machine.start_time + (start_time // DAY_MINUTES) * DAY_MINUTES
+                    )
+
+                # If the task ends after the machine stops, we move it to the next day, unless we allow preemption.
+                # If we allow preemption we will just continue with the work the next day
+                if start_time % DAY_MINUTES + task_duration > machine.end_time:
+                    # If we allow for preemption we will just add to the duration the time inbetween start and end time
+                    if machine.allow_preemption:
+                        task_duration += (
+                            DAY_MINUTES - machine.end_time + machine.start_time
+                        )
+                    else:
+                        start_time = (
+                            machine.start_time
+                            + (start_time // DAY_MINUTES + 1) * DAY_MINUTES
+                        )
+
+                end_time = start_time + task_duration
+                schedule[machine_idx].append((task_idx, start_time, end_time))
+                if machine.name.lower().startswith("mix"):
+                    # Get hf_id
+                    hf_id = self.jobs[task_idx].station_settings["taste"]
+                    stock.append((hf_id, task.amount, end_time))
 
         return schedule
 
@@ -540,7 +643,7 @@ class JobShopProblem:
         tardiness = 0
         for lateness in production_order_lateness.values():
             if any([l > 0 for l in lateness]):
-                tardiness += 1.0 * len(lateness)
+                tardiness += (max(lateness) / DAY_MINUTES) * len(lateness)
         return int(tardiness)
 
 
