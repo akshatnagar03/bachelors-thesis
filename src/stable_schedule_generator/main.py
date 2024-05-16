@@ -58,7 +58,7 @@ class JobShopProblem:
                 graph.add_edge(node, -2)
         return graph
 
-    def visualize_schedule(self, schedule: dict[int, list[tuple[int, int, int]]]):
+    def visualize_schedule(self, schedule: dict[int, list[tuple[int, int, int]]], save_path: str | None = None):
         """Visualizes a schedule."""
         fig, ax = plt.subplots(figsize=(13, 7))
         cmap = plt.get_cmap("tab20")
@@ -157,7 +157,10 @@ class JobShopProblem:
                 color="red",
             )
 
-        plt.show()
+        if save_path:
+            plt.savefig(save_path)
+        else:
+            plt.show()
 
     @classmethod
     def from_data(cls, data: Data) -> Self:
