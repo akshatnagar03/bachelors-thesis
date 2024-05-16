@@ -10,7 +10,7 @@ DAY_MINUTES = 24 * 60
 
 
 class Job(BaseModel):
-    available_machines: dict[int, int]
+    available_machines: dict[int, float]
     dependencies: list[int]
     production_order_nr: str
     station_settings: dict[str, Any] = dict()
@@ -448,7 +448,6 @@ class JobShopProblem:
                 job_schedule[task_idx] = (machine_idx, start_time, end_time)
 
         return schedule
-            
 
     def makespan(self, schedule: schedule_type) -> int:
         """Calculate the makespan of the schedule.
@@ -524,9 +523,30 @@ class JobShopProblem:
             + (makespan - self.LOW_MAKESPAN) / self.LOW_MAKESPAN
         )
 
+    def boolean_tardiness(self, schedule: schedule_type) -> int:
+        production_order_lateness = {
+            order.production_order_nr: [] for order in self.data.production_orders
+        }
+        for machine in schedule.values():
+            for task in machine:
+                production_order_lateness[
+                    self.jobs[task[0]].production_order_nr
+                ].append(
+                    max(
+                        task[2] - self.jobs[task[0]].days_till_delivery * DAY_MINUTES, 0
+                    )
+                )
+
+        tardiness = 0
+        for lateness in production_order_lateness.values():
+            if any([l > 0 for l in lateness]):
+                tardiness += 1.0 * len(lateness)
+        return int(tardiness)
+
 
 class ObjectiveFunction(Enum):
     CUSTOM_OBJECTIVE = 0
     MAKESPAN = 1
     TARDINESS = 2
     TOTAL_SETUP_TIME = 3
+    BOOLEAN_TARDINESS = 4
