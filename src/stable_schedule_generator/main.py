@@ -35,6 +35,10 @@ schedule_type = dict[int, list[tuple[int, int, int]]]
 
 
 class JobShopProblem:
+    LOW_TARDINESS = None
+    LOW_TOTAL_SETUP_TIME = None
+    LOW_MAKESPAN = None
+
     def __init__(self, data: Data, jobs: list[Job], machines: list[Machine]) -> None:
         self.data: Data = data
         self.jobs: list[Job] = jobs
@@ -58,7 +62,11 @@ class JobShopProblem:
                 graph.add_edge(node, -2)
         return graph
 
-    def visualize_schedule(self, schedule: dict[int, list[tuple[int, int, int]]], save_path: str | None = None):
+    def visualize_schedule(
+        self,
+        schedule: dict[int, list[tuple[int, int, int]]],
+        save_path: str | None = None,
+    ):
         """Visualizes a schedule."""
         fig, ax = plt.subplots(figsize=(13, 7))
         cmap = plt.get_cmap("tab20")
@@ -406,7 +414,11 @@ class JobShopProblem:
             for task in machine:
                 production_order_lateness[
                     self.jobs[task[0]].production_order_nr
-                ].append(max(task[2] - self.jobs[task[0]].days_till_delivery * DAY_MINUTES, 0))
+                ].append(
+                    max(
+                        task[2] - self.jobs[task[0]].days_till_delivery * DAY_MINUTES, 0
+                    )
+                )
 
         tardiness = 0
         for lateness in production_order_lateness.values():
@@ -429,6 +441,23 @@ class JobShopProblem:
                 if idx > 0:
                     setup_time += self.setup_times[machine[idx - 1][0], task[0]]
         return setup_time
+
+    def custom_objective(self, schedule: schedule_type) -> float:
+        tardiness = self.tardiness(schedule)
+        total_setup_time = self.total_setup_time(schedule)
+        makespan = self.makespan(schedule)
+        if self.LOW_TARDINESS is None:
+            self.LOW_TARDINESS = 1600.0
+        if self.LOW_TOTAL_SETUP_TIME is None:
+            self.LOW_TOTAL_SETUP_TIME = 10.0
+        if self.LOW_MAKESPAN is None:
+            self.LOW_MAKESPAN = 3600.0
+
+        return (
+            (tardiness - self.LOW_TARDINESS) / self.LOW_TARDINESS
+            + (total_setup_time - self.LOW_TOTAL_SETUP_TIME) / self.LOW_TOTAL_SETUP_TIME
+            + (makespan - self.LOW_MAKESPAN) / self.LOW_MAKESPAN
+        )
 
 
 class ObjectiveFunction(Enum):
