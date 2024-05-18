@@ -141,7 +141,7 @@ class JobShopProblem:
         plt.xticks(ticks=np.concatenate([day_markers]), labels=day_labels)
         plt.yticks(
             ticks=np.arange(1, len(schedule) + 1),
-            labels=[f"Machine {m}" for m in schedule.keys()],
+            labels=[str(self.machines[m].name) for m in schedule.keys()],
         )
         plt.xlabel("Days")
         plt.ylabel("Machine")
