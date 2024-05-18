@@ -239,11 +239,18 @@ if __name__ == "__main__":
     data = parse_data("examples/data_v1.xlsx")
     jssp = JobShopProblem.from_data(data)
     start_time = time.time()
-    aco = TwoStageACO(jssp, ObjectiveFunction.TARDINESS, verbose=True, n_iter=100, tau_zero=1.0 / (500*16000.0), q_zero=0.85)
+    aco = TwoStageACO(
+        jssp,
+        ObjectiveFunction.TARDINESS,
+        verbose=True,
+        n_iter=100,
+        tau_zero=1.0 / (500 * 16000.0),
+        q_zero=0.85,
+    )
     aco.run()
     print(aco.best_solution)
     print(f"Time taken: {time.time() - start_time}")
     aco.problem.visualize_schedule(
-        aco.problem.make_schedule(aco.best_solution[2], aco.best_solution[1])
-        , "examples/schedule_tardiness_100_new.png"
+        aco.problem.make_schedule(aco.best_solution[2], aco.best_solution[1]),
+        "examples/schedule_tardiness_100_new.png",
     )

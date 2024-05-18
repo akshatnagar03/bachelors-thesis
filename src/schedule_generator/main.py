@@ -47,8 +47,13 @@ class JobShopProblem:
         self.setup_times: np.ndarray = np.zeros((len(jobs), len(jobs)))
         self.graph = self._build_graph()
         self.bottle_size_mapping: dict[str, float] = {
-            product.setting_bottle_size: data.bill_of_materials[product.product_id].component_quantity if product.setting_bottle_size else 1.0
-            for product in data.products.values() if product.setting_bottle_size
+            product.setting_bottle_size: data.bill_of_materials[
+                product.product_id
+            ].component_quantity
+            if product.setting_bottle_size
+            else 1.0
+            for product in data.products.values()
+            if product.setting_bottle_size
         }
 
     def _build_graph(self) -> nx.DiGraph:
@@ -280,7 +285,7 @@ class JobShopProblem:
                             production_order_nr=order.production_order_nr,
                             station_settings={
                                 "taste": products[idx][0].setting_taste,
-                                "bottle_size": products[idx][0].setting_bottle_size, # type: ignore
+                                "bottle_size": products[idx][0].setting_bottle_size,  # type: ignore
                             },
                             amount=amount,
                             days_till_delivery=order.days_till_delivery,
@@ -465,7 +470,9 @@ class JobShopProblem:
             m.machine_id: [(-1, 0, m.start_time)] for m in self.machines
         }
         # job_schedule: dict[int, tuple[int, int, int]] = dict()
-        mixing_machines = [m for m in self.machines if m.name.lower().startswith("mixing")]
+        mixing_machines = [
+            m for m in self.machines if m.name.lower().startswith("mixing")
+        ]
         for m in mixing_machines:
             machine_idx = m.machine_id
             for task_idx in job_orders[machine_idx]:
@@ -513,7 +520,11 @@ class JobShopProblem:
                 # job_schedule[task_idx] = (machine_idx, start_time, end_time)
 
         # Handle the bottling machines
-        jobs_left_per_machine = {m.machine_id: 0 for m in self.machines if m.name.lower().startswith("bottling")}
+        jobs_left_per_machine = {
+            m.machine_id: 0
+            for m in self.machines
+            if m.name.lower().startswith("bottling")
+        }
         while True:
             if all([v == len(job_orders[m]) for m, v in jobs_left_per_machine.items()]):
                 break
@@ -539,9 +550,14 @@ class JobShopProblem:
                 relevant_task.append(latest_job_on_same_machine)
 
                 if self.machines[machine_idx].name.lower().startswith("bottl"):
-                    amount_needed = task.amount * self.bottle_size_mapping[task.station_settings["bottle_size"]]
+                    amount_needed = (
+                        task.amount
+                        * self.bottle_size_mapping[task.station_settings["bottle_size"]]
+                    )
                     # Look for the mixing machines and see from which we can tak
-                    take_from: dict[int, list[tuple[float, int, int]]] = {m.machine_id: [(0.0, -1, 0)] for m in mixing_machines}
+                    take_from: dict[int, list[tuple[float, int, int]]] = {
+                        m.machine_id: [(0.0, -1, 0)] for m in mixing_machines
+                    }
                     for mix_machine in mixing_machines:
                         mix_machine_sum = 0.0
                         mix_machine_schedule = schedule[mix_machine.machine_id]
@@ -549,14 +565,24 @@ class JobShopProblem:
                             if mix_task_idx[0] == -1:
                                 continue
                             mix_task = self.jobs[mix_task_idx[0]]
-                            if mix_task.station_settings["taste"] == task.station_settings["taste"]:
-                                to_use = min(amount_needed - mix_machine_sum, mix_task.amount - mix_task.used)
+                            if (
+                                mix_task.station_settings["taste"]
+                                == task.station_settings["taste"]
+                            ):
+                                to_use = min(
+                                    amount_needed - mix_machine_sum,
+                                    mix_task.amount - mix_task.used,
+                                )
                                 mix_machine_sum += to_use
-                                take_from[mix_machine.machine_id].append((to_use, mix_task_idx[0], mix_task_idx[2]))
+                                take_from[mix_machine.machine_id].append(
+                                    (to_use, mix_task_idx[0], mix_task_idx[2])
+                                )
                             if mix_machine_sum >= amount_needed:
                                 break
                     # Take from the mixing machine which has the lowest finish time
-                    take_from_machine = min(take_from, key=lambda x: take_from[x][-1][1])
+                    take_from_machine = min(
+                        take_from, key=lambda x: take_from[x][-1][1]
+                    )
                     for tsk in take_from[take_from_machine]:
                         if tsk[1] == -1:
                             continue
@@ -564,7 +590,6 @@ class JobShopProblem:
                         self.jobs[tsk[1]].used += tsk[0]
                         # Update the relevant tasks
                         relevant_task.append((tsk[1], 0, tsk[2]))
-                        
 
                 # Get the start time of the task
                 start_time = max([task[2] for task in relevant_task])
