@@ -146,7 +146,7 @@ class JobShopProblem:
         # plt.xticks(ticks=np.concatenate([day_markers]), labels=day_labels)
         plt.yticks(
             ticks=np.arange(1, len(schedule) + 1),
-            labels=[f"Machine {m}" for m in schedule.keys()],
+            labels=[str(self.machines[m].name) for m in schedule.keys()],
         )
         plt.xlabel("Days")
         plt.ylabel("Machine")
@@ -267,7 +267,7 @@ class JobShopProblem:
                         amount = prod["amount"] % ((batch_info["batches"] - 1) * amount)
                         if amount == 0:
                             amount = prod["amount"] // batch_info["batches"]
-
+                    amount = np.ceil(amount)
                     sub_jobs.append(
                         Job(
                             available_machines={
