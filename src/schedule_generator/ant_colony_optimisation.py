@@ -168,11 +168,16 @@ class TwoStageACO:
 
         probabilites = np.zeros(len(jobs_to_schedule_list))
         denominator = 0.0
+        last_job_prod_order = self.problem.jobs[last].production_order_nr
         for idx, job in enumerate(jobs_to_schedule_list):
+            if self.problem.jobs[job].production_order_nr == last_job_prod_order:
+                coef = 0.5
+            else:
+                coef = 1.0
             tau_r_s = self.pheromones_stage_two[last, job, machine]
             eta_r_s = 1.0 / (
-                self.problem.jobs[job].available_machines[machine]
-                + self.problem.setup_times[last, job]
+                (self.problem.jobs[job].available_machines[machine]
+                + self.problem.setup_times[last, job]) * coef
             )
             numerator = tau_r_s * eta_r_s**self.beta
             probabilites[idx] = numerator
@@ -194,7 +199,7 @@ class TwoStageACO:
                 schedule[machine][1:],
                 key=lambda x: self.problem.jobs[x].days_till_delivery,
             )
-        elif x < 0.75:
+        elif x < 0.5:
             # Swap 5% of the jobs
             for _ in range(int(0.025 * len(self.problem.jobs))):
                 machine = np.random.randint(len(self.problem.machines))
@@ -205,7 +210,20 @@ class TwoStageACO:
                     schedule[machine][job1],
                 )
         else:
-            return (10e10, schedule)
+            # Swap the machine for a job
+            for _ in range(int(0.05 * len(self.problem.jobs))):
+                machine1 = np.random.randint(len(self.problem.machines))
+                job_idx = np.random.randint(1, len(schedule[machine1]))
+                job_idx = schedule[machine1].pop(job_idx)
+                job = self.problem.jobs[job_idx]
+                available_machines = list(job.available_machines.keys())
+                new_machine = np.random.choice(available_machines)
+                if len(schedule[new_machine]) == 1:
+                    schedule[new_machine].append(job_idx)
+                else:
+                    insert_idx = np.random.randint(1, len(schedule[new_machine]))
+                    schedule[new_machine].insert(insert_idx, job_idx)
+
         objective_value = self.evaluate(schedule)
         if objective_value <= self.best_solution[0]:
             self.best_solution = (objective_value, schedule)
@@ -267,17 +285,21 @@ if __name__ == "__main__":
     start_time = time.time()
     aco = TwoStageACO(
         jssp,
-        ObjectiveFunction.TOTAL_SETUP_TIME,
-        verbose=True,
+        ObjectiveFunction.CUSTOM_OBJECTIVE,
+        verbose=False,
         n_iter=100,
-        n_ants=500,
-        tau_zero=1.0 / (500 * 225.0),
+        n_ants=100,
+        tau_zero=1.0 / (100 * 1.0),
         q_zero=0.85,
-        with_stock_schedule=True
+        with_stock_schedule=False,
+        seed=2345789
     )
     aco.run()
     print(aco.best_solution)
     print(f"Time taken: {time.time() - start_time}")
     aco.problem.visualize_schedule(
         aco.problem.make_schedule_from_parallel_with_stock(aco.best_solution[1])
+    )
+    aco.problem.visualize_schedule(
+        aco.problem.make_schedule_from_parallel(aco.best_solution[1])
     )
