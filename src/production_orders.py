@@ -69,10 +69,12 @@ def parse_data(path: str) -> Data:
         Workstation(**workstation)  # type: ignore
         for workstation in workstations_df.to_dict("records")
     ]
-    products = {product["product_id"]: Product(**product) for product in products_df.to_dict("records")}  # type: ignore
+    products = {
+        product["product_id"]: Product(**product)
+        for product in products_df.to_dict("records")
+    }  # type: ignore
     bill_of_materials = {
-        bom["parent_id"]:
-        BillOfMaterial(**bom)  # type: ignore
+        bom["parent_id"]: BillOfMaterial(**bom)  # type: ignore
         for bom in bill_of_materials_df.to_dict("records")
     }
     production_orders = [
