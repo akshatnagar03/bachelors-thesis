@@ -7,7 +7,7 @@ See instructions here [Forking Workflow](https://www.atlassian.com/git/tutorials
 
 ### Dependencies
 1. Make sure you have [poetry](https://python-poetry.org/docs/#installation) installed. The most simple way is to install with `pip install poetry`, but follow the instructions in the link. You can test if you have poetry installed by running `poetry --version`.
-2. Open a terminal in the `./code` directory.
+2. Open a terminal in the `./src` directory.
 3. Run `poetry install` to download the dependencies.
 4. Run `poetry shell` to set your terminal to use the newly created virtual environment.
-5. To run a script, simply run `python3 path_to_file_to_run.py` in the terminal in which you started the new shell.
+5. To run a script, simply run `python3 path_to_file_to_run.py` in the terminal in which you started the new shell. Alternatively, if you are running from a notebook, point the kernel to the path of the newly created `.venv` folder in `./src/.venv/Scripts/python`.
