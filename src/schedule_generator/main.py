@@ -239,7 +239,8 @@ class JobShopProblem:
                 min_max_units_per_run = min(
                     [machines[m].max_units_per_run for m in prod_info["machines"]]
                 )
-                prod_info["batches"] = max(int(amount // min_max_units_per_run),1)
+                batches = np.ceil(amount / min_max_units_per_run)
+                prod_info["batches"] = int(batches)
                 prod_info["batches_amount"] = min_max_units_per_run
                 remainder = int(amount % min_max_units_per_run)
                 prod_info["batches_remainder"] = (
@@ -261,8 +262,9 @@ class JobShopProblem:
                         dependencies.append(len(sub_jobs) - 1)
 
                     amount = prod["amount"] // batch_info["batches"]
-                    if i == batch_info["batches"] - 1:
-                        amount = prod["amount"] % batch_info["batches"]
+
+                    if i == batch_info["batches"] - 1 and batch_info["batches"] > 1:
+                        amount = prod["amount"] % ((batch_info["batches"] - 1) * amount)
                         if amount == 0:
                             amount = prod["amount"] // batch_info["batches"]
 

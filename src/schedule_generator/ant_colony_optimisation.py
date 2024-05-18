@@ -287,19 +287,20 @@ if __name__ == "__main__":
         jssp,
         ObjectiveFunction.CUSTOM_OBJECTIVE,
         verbose=False,
-        n_iter=100,
+        n_iter=500,
         n_ants=100,
-        tau_zero=1.0 / (100 * 1.0),
+        tau_zero=1.0 / (100 * 1.5),
         q_zero=0.85,
         with_stock_schedule=False,
-        seed=2345789
+        seed=65490
     )
     aco.run()
     print(aco.best_solution)
     print(f"Time taken: {time.time() - start_time}")
+    print(f"Compare {aco.best_solution[0]}", aco.problem.custom_objective(aco.problem.make_schedule_from_parallel_with_stock(aco.best_solution[1])))
     aco.problem.visualize_schedule(
         aco.problem.make_schedule_from_parallel_with_stock(aco.best_solution[1])
     )
-    aco.problem.visualize_schedule(
-        aco.problem.make_schedule_from_parallel(aco.best_solution[1])
-    )
+    # aco.problem.visualize_schedule(
+    #     aco.problem.make_schedule_from_parallel(aco.best_solution[1])
+    # )
