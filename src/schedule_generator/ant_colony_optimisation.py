@@ -20,6 +20,8 @@ class TwoStageACO:
         tau_zero: float = 1.0,
         verbose: bool = False,
         with_stock_schedule: bool = False,
+        with_local_search: bool = True,
+        local_search_iterations: int = 20,
     ) -> None:
         """Initializes the two-stage ACO algorithm.
 
@@ -58,7 +60,7 @@ class TwoStageACO:
         # to the number of tasks. However, (0,0) in pheromones should become 0.0
         # quickly since it can never be chosen.
         self.pheromones_stage_one = (
-            np.ones((len(self.problem.jobs), len(self.problem.machines))) * tau_zero
+            np.ones((len(self.problem.jobs), len(self.problem.machines)))# * tau_zero
         )
         self.pheromones_stage_two = (
             np.ones(
@@ -68,15 +70,20 @@ class TwoStageACO:
                     len(self.problem.machines),
                 )
             )
-            * tau_zero
+            #* tau_zero
         )
         self.best_solution: tuple[float, list[list[int]]] = (1e100, list(list()))
         self.with_stock_schedule = with_stock_schedule
+        self.with_local_search = with_local_search
+        self.local_search_iterations = local_search_iterations
+        self.generation_since_last_update = 0
 
     def evaluate(self, parallel_schedule: list[list[int]]) -> float:
         """Evaluates the path and machine assignment."""
         if self.with_stock_schedule:
-            schedule = self.problem.make_schedule_from_parallel_with_stock(parallel_schedule)
+            schedule = self.problem.make_schedule_from_parallel_with_stock(
+                parallel_schedule
+            )
         else:
             schedule = self.problem.make_schedule_from_parallel(parallel_schedule)
         if self.objective_function == ObjectiveFunction.MAKESPAN:
@@ -122,16 +129,16 @@ class TwoStageACO:
         return assignment
 
     def global_update_pheromones(self):
-        inverse_best_value = 1.0 / self.best_solution[0]
+        inverse_best_value = (1.0 / self.best_solution[0]) * self.tau_zero
         for m_idx, order in enumerate(self.best_solution[1]):
             for idx, job_idx in enumerate(order):
+                if idx == 0 or job_idx == -1:
+                    continue
                 # Update stage one
                 self.pheromones_stage_one[job_idx, m_idx] = (
                     self.pheromones_stage_one[job_idx, m_idx] * (1 - self.alpha)
                     + self.alpha * inverse_best_value
                 )
-                if idx == 0:
-                    continue
                 # Update stage two
                 last_job_idx = order[idx - 1]
                 self.pheromones_stage_two[last_job_idx, job_idx, m_idx] = (
@@ -143,12 +150,12 @@ class TwoStageACO:
     def local_update_pheromones(self, schedule: list[list[int]]):
         for machine in range(len(self.problem.machines)):
             for idx, job_idx in enumerate(schedule[machine]):
-                if idx == 0:
+                if idx == 0 or job_idx == -1:
                     continue
                 # Update stage one
                 self.pheromones_stage_one[job_idx, machine] = (
                     self.pheromones_stage_one[job_idx, machine] * (1 - self.rho)
-                    + self.rho * self.tau_zero
+                    + self.rho * 0.4 #* self.tau_zero
                 )
 
                 # Update stage two
@@ -156,7 +163,7 @@ class TwoStageACO:
                 self.pheromones_stage_two[last_job_idx, job_idx, machine] = (
                     self.pheromones_stage_two[last_job_idx, job_idx, machine]
                     * (1 - self.rho)
-                    + self.rho * self.tau_zero
+                    + self.rho * 0.4 #* self.tau_zero
                 )
 
     def draw_job_to_schedule(
@@ -176,8 +183,12 @@ class TwoStageACO:
                 coef = 1.0
             tau_r_s = self.pheromones_stage_two[last, job, machine]
             eta_r_s = 1.0 / (
-                (self.problem.jobs[job].available_machines[machine]
-                + self.problem.setup_times[last, job]) * coef
+                (
+                    1
+                    # self.problem.jobs[job].available_machines[machine]
+                    + self.problem.setup_times[last, job]
+                )
+                * coef
             )
             numerator = tau_r_s * eta_r_s**self.beta
             probabilites[idx] = numerator
@@ -185,7 +196,7 @@ class TwoStageACO:
 
         if np.random.rand() <= self.q_zero:
             return jobs_to_schedule_list[np.argmax(probabilites)]
-        if denominator <= 1e-6:
+        if denominator <= 1e-7:
             return np.random.choice(jobs_to_schedule_list)
         probabilites = probabilites / denominator
         return np.random.choice(jobs_to_schedule_list, p=probabilites)
@@ -261,6 +272,7 @@ class TwoStageACO:
             if objective_value == 0:
                 raise KeyboardInterrupt
             self.best_solution = (objective_value, schedule)
+            self.generation_since_last_update = 0
             if self.verbose:
                 print(f"New best solution: {self.best_solution[0]}")
 
@@ -277,6 +289,14 @@ class TwoStageACO:
                     f"Generation {gen}, best objective value: {self.best_solution[0]}"
                 )
             self.global_update_pheromones()
+            self.generation_since_last_update += 1
+            if self.generation_since_last_update == 50:
+                print("Resetting pheromones...")
+                self.pheromones_stage_one *= 0
+                self.pheromones_stage_one += 1
+                self.pheromones_stage_two *= 0
+                self.pheromones_stage_two += 1
+
 
 
 if __name__ == "__main__":
