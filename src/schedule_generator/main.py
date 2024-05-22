@@ -714,9 +714,10 @@ class JobShopProblem:
 
         tardiness = 0
         for lateness in production_order_lateness.values():
-            if any([l > 0 for l in lateness]):
-                tardiness += (max(lateness) / DAY_MINUTES) * len(lateness)
-        return int(tardiness)
+            bool_lateness = [l > 0 for l in lateness]
+            if any(bool_lateness):
+                tardiness += (max(lateness) // DAY_MINUTES + 1) * len(lateness)
+        return tardiness
 
 
 class ObjectiveFunction(Enum):
