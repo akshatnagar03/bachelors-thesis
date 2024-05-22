@@ -201,46 +201,52 @@ class TwoStageACO:
         probabilites = probabilites / denominator
         return np.random.choice(jobs_to_schedule_list, p=probabilites)
 
-    def local_search(self, schedule: list[list[int]]) -> tuple[float, list[list[int]]]:
+    def local_search(self, schedule: list[list[int]], schedule_objective_value: float):
         x = np.random.rand()
-        if x < 0.00:
-            machine = np.random.randint(len(self.problem.machines))
-            # sort the jobs by their order_id
-            schedule[machine] = sorted(
-                schedule[machine][1:],
-                key=lambda x: self.problem.jobs[x].days_till_delivery,
-            )
-        elif x < 0.5:
-            # Swap 5% of the jobs
-            for _ in range(int(0.025 * len(self.problem.jobs))):
+        new_schedule = [list(x) for x in schedule]
+        for _ in range(self.local_search_iterations):
+            if x < 0.00:
                 machine = np.random.randint(len(self.problem.machines))
-                job1 = np.random.randint(1, len(schedule[machine]))
-                job2 = np.random.randint(1, len(schedule[machine]))
-                schedule[machine][job1], schedule[machine][job2] = (
-                    schedule[machine][job2],
-                    schedule[machine][job1],
+                # take a small percentage of the jobs on one machine and sort them
+                start_index = np.random.randint(1, len(schedule[machine]))
+                end_index = start_index + 10
+                to_be_sorted = new_schedule[machine][start_index:end_index]
+                to_be_sorted = sorted(
+                    to_be_sorted,
+                    key=lambda x: self.problem.jobs[x].days_till_delivery,
                 )
-        else:
-            # Swap the machine for a job
-            for _ in range(int(0.05 * len(self.problem.jobs))):
-                machine1 = np.random.randint(len(self.problem.machines))
-                job_idx = np.random.randint(1, len(schedule[machine1]))
-                job_idx = schedule[machine1].pop(job_idx)
-                job = self.problem.jobs[job_idx]
-                available_machines = list(job.available_machines.keys())
-                new_machine = np.random.choice(available_machines)
-                if len(schedule[new_machine]) == 1:
-                    schedule[new_machine].append(job_idx)
-                else:
-                    insert_idx = np.random.randint(1, len(schedule[new_machine]))
-                    schedule[new_machine].insert(insert_idx, job_idx)
+                # sort the jobs by their order_id
+                new_schedule[machine][start_index:end_index] = to_be_sorted
+            elif x < 0.5:
+                # Swap 5% of the jobs
+                for _ in range(int(0.025 * len(self.problem.jobs))):
+                    machine = np.random.randint(len(self.problem.machines))
+                    job1 = np.random.randint(1, len(new_schedule[machine]))
+                    job2 = np.random.randint(1, len(new_schedule[machine]))
+                    new_schedule[machine][job1], new_schedule[machine][job2] = (
+                        new_schedule[machine][job2],
+                        new_schedule[machine][job1],
+                    )
+            else:
+                # Swap the machine for a job
+                for _ in range(int(0.05 * len(self.problem.jobs))):
+                    machine1 = np.random.randint(len(self.problem.machines))
+                    job_idx = np.random.randint(1, len(new_schedule[machine1]))
+                    job_idx = new_schedule[machine1].pop(job_idx)
+                    job = self.problem.jobs[job_idx]
+                    available_machines = list(job.available_machines.keys())
+                    new_machine = np.random.choice(available_machines)
+                    if len(new_schedule[new_machine]) == 1:
+                        new_schedule[new_machine].append(job_idx)
+                    else:
+                        insert_idx = np.random.randint(1, len(new_schedule[new_machine]))
+                        new_schedule[new_machine].insert(insert_idx, job_idx)
 
-        objective_value = self.evaluate(schedule)
-        if objective_value <= self.best_solution[0]:
-            self.best_solution = (objective_value, schedule)
-            if self.verbose:
-                print(f"New best solution (in ls): {self.best_solution[0]}")
-        return (objective_value, schedule)
+            objective_value = self.evaluate(new_schedule)
+            if objective_value < schedule_objective_value:
+                schedule = new_schedule
+            else:
+                new_schedule = [list(x) for x in schedule]
 
     def run_ant(self) -> list[list[int]]:
         machine_assignment = self.assign_machines()
@@ -263,10 +269,8 @@ class TwoStageACO:
     def run_and_update_ant(self):
         schedule = self.run_ant()
         objective_value = self.evaluate(schedule)
-        local_search_objective_value, local_search_schedule = self.local_search(schedule)
-        if local_search_objective_value < objective_value:
-            objective_value = local_search_objective_value
-            schedule = local_search_schedule
+        if self.with_local_search:
+            self.local_search(schedule, objective_value)
         self.local_update_pheromones(schedule)
         if objective_value <= self.best_solution[0]:
             if objective_value == 0:
