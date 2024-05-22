@@ -1,6 +1,7 @@
 import time
 from src.production_orders import parse_data
 from src.schedule_generator.main import JobShopProblem, ObjectiveFunction
+from src.schedule_generator.numba_numpy_functions import select_random_item
 import numpy as np
 
 
@@ -120,14 +121,15 @@ class TwoStageACO:
                 denominator += numerator
 
             if denominator <= 1e-6:
-                chosen_machine = np.random.choice(available_machines)
+                chosen_machine = select_random_item(available_machines)
                 assignment[chosen_machine].add(idx)
                 continue
             probabilities = probabilities / denominator
-            chosen_machine = np.random.choice(available_machines, p=probabilities)
+            chosen_machine = select_random_item(available_machines, probabilities=probabilities)
             assignment[chosen_machine].add(idx)
         return assignment
 
+    
     def global_update_pheromones(self):
         inverse_best_value = (1.0 / self.best_solution[0]) * self.tau_zero
         for m_idx, order in enumerate(self.best_solution[1]):
@@ -171,7 +173,7 @@ class TwoStageACO:
     ) -> int:
         jobs_to_schedule_list = list(jobs_to_schedule)
         if last == -1:
-            return np.random.choice(jobs_to_schedule_list)
+            return select_random_item(jobs_to_schedule_list)
 
         probabilites = np.zeros(len(jobs_to_schedule_list))
         denominator = 0.0
@@ -197,9 +199,9 @@ class TwoStageACO:
         if np.random.rand() <= self.q_zero:
             return jobs_to_schedule_list[np.argmax(probabilites)]
         if denominator <= 1e-7:
-            return np.random.choice(jobs_to_schedule_list)
+            return select_random_item(jobs_to_schedule_list)
         probabilites = probabilites / denominator
-        return np.random.choice(jobs_to_schedule_list, p=probabilites)
+        return select_random_item(jobs_to_schedule_list, probabilities=probabilites)
 
     def local_search(self, schedule: list[list[int]], schedule_objective_value: float):
         x = np.random.rand()
@@ -235,7 +237,7 @@ class TwoStageACO:
                     job_idx = new_schedule[machine1].pop(job_idx)
                     job = self.problem.jobs[job_idx]
                     available_machines = list(job.available_machines.keys())
-                    new_machine = np.random.choice(available_machines)
+                    new_machine = select_random_item(available_machines)
                     if len(new_schedule[new_machine]) == 1:
                         new_schedule[new_machine].append(job_idx)
                     else:
@@ -294,7 +296,7 @@ class TwoStageACO:
                 )
             self.global_update_pheromones()
             self.generation_since_last_update += 1
-            if self.generation_since_last_update == 50:
+            if self.generation_since_last_update == 100:
                 print("Resetting pheromones...")
                 self.pheromones_stage_one *= 0
                 self.pheromones_stage_one += 1
