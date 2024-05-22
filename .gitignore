@@ -155,3 +155,4 @@ cython_debug/
 # Project specific
 src/examples/~$*
 src/**/*.png
+src/benchmarks
