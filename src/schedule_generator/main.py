@@ -397,7 +397,7 @@ class JobShopProblem:
 
         return schedule
 
-    def make_schedule_from_parallel(self, job_orders: list[list[int]]) -> schedule_type:
+    def make_schedule_from_parallel(self, job_orders: list[list[int]] | np.ndarray) -> schedule_type:
         schedule: dict[int, list[tuple[int, int, int]]] = {
             m.machine_id: [(-1, 0, m.start_time)] for m in self.machines
         }
@@ -407,6 +407,8 @@ class JobShopProblem:
             for task_idx in job_orders[machine_idx]:
                 if task_idx == -1:
                     continue
+                if task_idx == -2:
+                    break
                 task: Job = self.jobs[task_idx]
                 if machine_idx not in task.available_machines:
                     raise ScheduleError(
@@ -464,7 +466,7 @@ class JobShopProblem:
         return schedule
 
     def make_schedule_from_parallel_with_stock(
-        self, job_orders: list[list[int]]
+        self, job_orders: list[list[int]] | np.ndarray
     ) -> schedule_type:
         schedule: dict[int, list[tuple[int, int, int]]] = {
             m.machine_id: [(-1, 0, m.start_time)] for m in self.machines
@@ -478,6 +480,8 @@ class JobShopProblem:
             for task_idx in job_orders[machine_idx]:
                 if task_idx == -1:
                     continue
+                if task_idx == -2:
+                    break
                 task: Job = self.jobs[task_idx]
                 task.used = 0.0
                 if machine_idx not in task.available_machines:
@@ -533,7 +537,7 @@ class JobShopProblem:
                     continue
                 machine = self.machines[machine_idx]
                 task_idx = job_orders[machine_idx][jobs_left_per_machine[machine_idx]]
-                if task_idx == -1:
+                if task_idx == -1 or task_idx == -2:
                     jobs_left_per_machine[machine_idx] += 1
                     continue
                 task: Job = self.jobs[task_idx]
