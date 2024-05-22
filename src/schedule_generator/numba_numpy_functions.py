@@ -1,6 +1,10 @@
 import numpy as np
 import numba as nb
 
+@nb.njit
+def nb_set_seed(seed: int):
+    np.random.seed(seed)
+
 def select_random_item(items, probabilities: np.ndarray | None = None):
     if probabilities is None:
         return items[np.random.randint(len(items))]
