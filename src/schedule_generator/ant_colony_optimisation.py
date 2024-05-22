@@ -1,9 +1,8 @@
 import time
 from src.production_orders import parse_data
 from src.schedule_generator.main import JobShopProblem, ObjectiveFunction
-from src.schedule_generator.numba_numpy_functions import nb_local_update_pheromones, select_random_item, nb_set_seed
+from src.schedule_generator.numba_numpy_functions import select_random_item, nb_set_seed
 import numpy as np
-
 
 class TwoStageACO:
     def __init__(
@@ -48,6 +47,7 @@ class TwoStageACO:
         self.n_ants = n_ants
         self.n_iter = n_iter
         np.random.seed(seed)
+        nb_set_seed(seed)
         self.rho = rho
         self.alpha = alpha
         self.beta = beta
@@ -73,13 +73,13 @@ class TwoStageACO:
             )
             #* tau_zero
         )
-        self.best_solution: tuple[float, list[list[int]]] = (1e100, list(list()))
+        self.best_solution: tuple[float, np.ndarray] = (1e100, np.zeros((1,1)))
         self.with_stock_schedule = with_stock_schedule
         self.with_local_search = with_local_search
         self.local_search_iterations = local_search_iterations
         self.generation_since_last_update = 0
 
-    def evaluate(self, parallel_schedule: list[list[int]]) -> float:
+    def evaluate(self, parallel_schedule: np.ndarray) -> float:
         """Evaluates the path and machine assignment."""
         if self.with_stock_schedule:
             schedule = self.problem.make_schedule_from_parallel_with_stock(
@@ -149,11 +149,13 @@ class TwoStageACO:
                     + self.alpha * inverse_best_value
                 )
 
-    def local_update_pheromones(self, schedule: list[list[int]]):
+    def local_update_pheromones(self, schedule: np.ndarray):
         for machine in range(len(self.problem.machines)):
             for idx, job_idx in enumerate(schedule[machine]):
                 if idx == 0 or job_idx == -1:
                     continue
+                if job_idx == -2:
+                    break
                 # Update stage one
                 self.pheromones_stage_one[job_idx, machine] = (
                     self.pheromones_stage_one[job_idx, machine] * (1 - self.rho)
@@ -203,60 +205,42 @@ class TwoStageACO:
         probabilites = probabilites / denominator
         return select_random_item(jobs_to_schedule_list, probabilities=probabilites)
 
-    def local_search(self, schedule: list[list[int]], schedule_objective_value: float):
-        x = np.random.rand()
-        new_schedule = [list(x) for x in schedule]
+    def local_search(self, schedule: np.ndarray, machine_assignment: dict[int, set[int]], schedule_objective_value: float):
+        new_schedule = schedule#.copy()
         for _ in range(self.local_search_iterations):
-            if x < 0.00:
+            x = np.random.rand()    
+            operation = (0, 0, 0)
+            if x < 0.5:
+                # Swap two jobs on the same machine
                 machine = np.random.randint(len(self.problem.machines))
-                # take a small percentage of the jobs on one machine and sort them
-                start_index = np.random.randint(1, len(schedule[machine]))
-                end_index = start_index + 10
-                to_be_sorted = new_schedule[machine][start_index:end_index]
-                to_be_sorted = sorted(
-                    to_be_sorted,
-                    key=lambda x: self.problem.jobs[x].days_till_delivery,
+                number_of_jobs_on_machine = len(machine_assignment[machine])
+                if number_of_jobs_on_machine < 2:
+                    continue
+                job1_idx = np.random.randint(1, number_of_jobs_on_machine)
+                job2_idx = np.random.randint(1, number_of_jobs_on_machine)
+                new_schedule[machine][job1_idx], new_schedule[machine][job2_idx] = (
+                    new_schedule[machine][job2_idx],
+                    new_schedule[machine][job1_idx],
                 )
-                # sort the jobs by their order_id
-                new_schedule[machine][start_index:end_index] = to_be_sorted
-            elif x < 0.5:
-                # Swap 5% of the jobs
-                for _ in range(int(0.025 * len(self.problem.jobs))):
-                    machine = np.random.randint(len(self.problem.machines))
-                    job1 = np.random.randint(1, len(new_schedule[machine]))
-                    job2 = np.random.randint(1, len(new_schedule[machine]))
-                    new_schedule[machine][job1], new_schedule[machine][job2] = (
-                        new_schedule[machine][job2],
-                        new_schedule[machine][job1],
-                    )
-            else:
-                # Swap the machine for a job
-                for _ in range(int(0.05 * len(self.problem.jobs))):
-                    machine1 = np.random.randint(len(self.problem.machines))
-                    job_idx = np.random.randint(1, len(new_schedule[machine1]))
-                    job_idx = new_schedule[machine1].pop(job_idx)
-                    job = self.problem.jobs[job_idx]
-                    available_machines = list(job.available_machines.keys())
-                    new_machine = select_random_item(available_machines)
-                    if len(new_schedule[new_machine]) == 1:
-                        new_schedule[new_machine].append(job_idx)
-                    else:
-                        insert_idx = np.random.randint(1, len(new_schedule[new_machine]))
-                        new_schedule[new_machine].insert(insert_idx, job_idx)
-
+                operation = (machine, job1_idx, job2_idx)
             objective_value = self.evaluate(new_schedule)
             if objective_value < schedule_objective_value:
                 schedule = new_schedule
             else:
-                new_schedule = [list(x) for x in schedule]
+                machine, job1_idx, job2_idx = operation
+                new_schedule[machine][job1_idx], new_schedule[machine][job2_idx] = (
+                    new_schedule[machine][job2_idx],
+                    new_schedule[machine][job1_idx],
+                )
 
-    def run_ant(self) -> list[list[int]]:
+    def run_ant(self) -> tuple[np.ndarray, dict[int, set[int]]]:
         machine_assignment = self.assign_machines()
-        schedules: list[list[int]] = [list() for _ in range(len(self.problem.machines))]
+        # schedules: list[list[int]] = [list() for _ in range(len(self.problem.machines))]
+        schedules = np.ones((len(self.problem.machines), len(self.problem.jobs)), dtype=np.int32) * -2
         for machine in range(len(self.problem.machines)):
-            schedules[machine].append(-1)
+            schedules[machine, 0] = -1
             jobs_assigned = set()
-            for _ in machine_assignment[machine]:
+            for i in range(len(machine_assignment[machine])):
                 job_idx = self.draw_job_to_schedule(
                     jobs_to_schedule=machine_assignment[machine].difference(
                         jobs_assigned
@@ -264,15 +248,15 @@ class TwoStageACO:
                     last=schedules[machine][-1],
                     machine=machine,
                 )
-                schedules[machine].append(job_idx)
+                schedules[machine, i + 1] = job_idx
                 jobs_assigned.add(job_idx)
-        return schedules
+        return schedules, machine_assignment
 
     def run_and_update_ant(self):
-        schedule = self.run_ant()
+        schedule, machine_assignment = self.run_ant()
         objective_value = self.evaluate(schedule)
         if self.with_local_search:
-            self.local_search(schedule, objective_value)
+            self.local_search(schedule, machine_assignment, objective_value)
         self.local_update_pheromones(schedule)
         if objective_value <= self.best_solution[0]:
             if objective_value == 0:
@@ -308,22 +292,23 @@ class TwoStageACO:
 if __name__ == "__main__":
     data = parse_data("examples/data_v1.xlsx")
     jssp = JobShopProblem.from_data(data)
-    start_time = time.time()
     aco = TwoStageACO(
         jssp,
         ObjectiveFunction.CUSTOM_OBJECTIVE,
-        verbose=False,
-        n_iter=500,
+        verbose=True,
+        n_iter=100,
         n_ants=100,
-        tau_zero=1.0 / (100 * 1.5),
+        tau_zero=1.0 / (0.1),
         q_zero=0.85,
         with_stock_schedule=False,
-        seed=65490
+        seed=65490,
+        with_local_search=False,
+        local_search_iterations=20,
     )
+    start_time = time.time()
     aco.run()
     print(aco.best_solution)
     print(f"Time taken: {time.time() - start_time}")
-    print(f"Compare {aco.best_solution[0]}", aco.problem.custom_objective(aco.problem.make_schedule_from_parallel_with_stock(aco.best_solution[1])))
     aco.problem.visualize_schedule(
         aco.problem.make_schedule_from_parallel_with_stock(aco.best_solution[1])
     )
