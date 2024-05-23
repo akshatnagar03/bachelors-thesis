@@ -467,7 +467,15 @@ class JobShopProblem:
 
         return schedule
 
-    def _calculate_start_and_end_time(self, machine_allow_preemption: bool, machine_start_time: int, machine_end_time: int, start_time: int, end_time: int, task_duration: int) -> tuple[int, int]:
+    def _calculate_start_and_end_time(
+        self,
+        machine_allow_preemption: bool,
+        machine_start_time: int,
+        machine_end_time: int,
+        start_time: int,
+        end_time: int,
+        task_duration: int,
+    ) -> tuple[int, int]:
         start_time_remainder = start_time % DAY_MINUTES
         if start_time_remainder < machine_start_time:
             start_time = machine_start_time + (start_time // DAY_MINUTES) * DAY_MINUTES
@@ -477,7 +485,9 @@ class JobShopProblem:
             if machine_allow_preemption:
                 task_duration += DAY_MINUTES - machine_end_time + machine_start_time
             else:
-                start_time = machine_start_time + (start_time // DAY_MINUTES + 1) * DAY_MINUTES
+                start_time = (
+                    machine_start_time + (start_time // DAY_MINUTES + 1) * DAY_MINUTES
+                )
         return int(start_time), int(start_time + task_duration)
 
     def make_schedule_from_parallel_with_stock(
@@ -489,9 +499,7 @@ class JobShopProblem:
         stock: dict[int, float] = {
             p: 0.0 for p in set([j.station_settings["taste"] for j in self.jobs])
         }
-        available_jobs: dict[int, int] = {
-            m: 0 for m in range(len(self.machines))
-        }
+        available_jobs: dict[int, int] = {m: 0 for m in range(len(self.machines))}
         # A list with release times, hf_product, amount of stock that soon will be produced
         awaiting_release: list[tuple[int, int, float]] = list()
         for _ in range(len(self.jobs)):
@@ -515,13 +523,16 @@ class JobShopProblem:
                 machine: Machine = self.machines[machine_idx]
                 latest_job_on_same_machine = schedule[machine_idx][-1]
                 start_time = latest_job_on_same_machine[2]
-                
+
                 if machine.name[0] == "M":
-                    jobs_to_choose_from.append((machine_idx, task_idx, start_time)) 
+                    jobs_to_choose_from.append((machine_idx, task_idx, start_time))
                     continue
                 elif machine.name[0] == "B":
                     # Check if we have enough stock to produce the product
-                    amount_needed = task.amount * self.bottle_size_mapping[task.station_settings["bottle_size"]]
+                    amount_needed = (
+                        task.amount
+                        * self.bottle_size_mapping[task.station_settings["bottle_size"]]
+                    )
                     stock_available = stock[task.station_settings["taste"]]
                     if stock_available >= amount_needed:
                         jobs_to_choose_from.append((machine_idx, task_idx, start_time))
@@ -536,12 +547,16 @@ class JobShopProblem:
                                 if release_time <= start_time:
                                     stock_available += amount
                                     if stock_available >= amount_needed:
-                                        jobs_to_choose_from.append((machine_idx, task_idx, start_time))
+                                        jobs_to_choose_from.append(
+                                            (machine_idx, task_idx, start_time)
+                                        )
                                         break
                                 else:
                                     stock_available += amount
                                     if stock_available >= amount_needed:
-                                        jobs_to_choose_from.append((machine_idx, task_idx, release_time))
+                                        jobs_to_choose_from.append(
+                                            (machine_idx, task_idx, release_time)
+                                        )
                                         break
 
             # Take the job that can start the soonest
@@ -550,32 +565,69 @@ class JobShopProblem:
             task: Job = self.jobs[chosen_job[1]]
             if machine.name[0] == "M":
                 start_time = chosen_job[2]
-                task_duration = task.available_machines[machine.machine_id] + self.setup_times[schedule[machine.machine_id][-1][0], chosen_job[1]]
+                task_duration = (
+                    task.available_machines[machine.machine_id]
+                    + self.setup_times[
+                        schedule[machine.machine_id][-1][0], chosen_job[1]
+                    ]
+                )
                 end_time = chosen_job[2] + task_duration
-                start_time, end_time = self._calculate_start_and_end_time(machine.allow_preemption, machine.start_time, machine.end_time, start_time, end_time, task_duration)
-                schedule[machine.machine_id].append((chosen_job[1], start_time, end_time))
-                awaiting_release.append((end_time, task.station_settings["taste"], task.amount))
+                start_time, end_time = self._calculate_start_and_end_time(
+                    machine.allow_preemption,
+                    machine.start_time,
+                    machine.end_time,
+                    start_time,
+                    end_time,
+                    task_duration,
+                )
+                schedule[machine.machine_id].append(
+                    (chosen_job[1], start_time, end_time)
+                )
+                awaiting_release.append(
+                    (end_time, task.station_settings["taste"], task.amount)
+                )
 
             elif machine.name[0] == "B":
-                amount_needed = task.amount * self.bottle_size_mapping[task.station_settings["bottle_size"]]
+                amount_needed = (
+                    task.amount
+                    * self.bottle_size_mapping[task.station_settings["bottle_size"]]
+                )
                 to_be_removed = list()
                 for release_time, hf_product, amount in awaiting_release:
-                    if hf_product == task.station_settings["taste"] and release_time <= chosen_job[2]:
+                    if (
+                        hf_product == task.station_settings["taste"]
+                        and release_time <= chosen_job[2]
+                    ):
                         stock[task.station_settings["taste"]] += amount
                         to_be_removed.append((release_time, hf_product, amount))
                 for r in to_be_removed:
                     awaiting_release.remove(r)
                 stock_available = stock[task.station_settings["taste"]]
                 if stock_available < amount_needed:
-                    raise ScheduleError(f"Stock is not enough to produce {task.production_order_nr}, this shouldn't happen...")
+                    raise ScheduleError(
+                        f"Stock is not enough to produce {task.production_order_nr}, this shouldn't happen..."
+                    )
                 start_time = chosen_job[2]
-                task_duration = task.available_machines[machine.machine_id] + self.setup_times[schedule[machine.machine_id][-1][0], chosen_job[1]]
+                task_duration = (
+                    task.available_machines[machine.machine_id]
+                    + self.setup_times[
+                        schedule[machine.machine_id][-1][0], chosen_job[1]
+                    ]
+                )
                 end_time = chosen_job[2] + task_duration
-                start_time, end_time = self._calculate_start_and_end_time(machine.allow_preemption, machine.start_time, machine.end_time, start_time, end_time, task_duration)
-                schedule[machine.machine_id].append((chosen_job[1], start_time, end_time))
+                start_time, end_time = self._calculate_start_and_end_time(
+                    machine.allow_preemption,
+                    machine.start_time,
+                    machine.end_time,
+                    start_time,
+                    end_time,
+                    task_duration,
+                )
+                schedule[machine.machine_id].append(
+                    (chosen_job[1], start_time, end_time)
+                )
                 stock[task.station_settings["taste"]] -= amount_needed
             available_jobs[machine.machine_id] += 1
-
 
         return schedule
 
@@ -682,9 +734,13 @@ class ObjectiveFunction(Enum):
     TOTAL_SETUP_TIME = 3
     BOOLEAN_TARDINESS = 4
 
+
 if __name__ == "__main__":
     from src.production_orders import parse_data
-    data = parse_data(r"B:\Documents\Skola\UvA\Y3P6\git_folder\src\examples\data_v1.xlsx")
+
+    data = parse_data(
+        r"B:\Documents\Skola\UvA\Y3P6\git_folder\src\examples\data_v1.xlsx"
+    )
     jssp = JobShopProblem.from_data(data)
     # sc = jssp.make_schedule_from_parallel_with_stock(np.array([[-1,0,10,4],[-1,5,-2,-2],[-1,1,-2,-2]]))
     # print(sc)
