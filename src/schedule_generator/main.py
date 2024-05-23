@@ -465,167 +465,116 @@ class JobShopProblem:
 
         return schedule
 
+    def _calculate_start_and_end_time(self, machine_allow_preemption: bool, machine_start_time: int, machine_end_time: int, start_time: int, end_time: int, task_duration: int) -> tuple[int, int]:
+        start_time_remainder = start_time % DAY_MINUTES
+        if start_time_remainder < machine_start_time:
+            start_time = machine_start_time + (start_time // DAY_MINUTES) * DAY_MINUTES
+            start_time_remainder = start_time % DAY_MINUTES
+
+        if start_time_remainder + task_duration > machine_end_time:
+            if machine_allow_preemption:
+                task_duration += DAY_MINUTES - machine_end_time + machine_start_time
+            else:
+                start_time = machine_start_time + (start_time // DAY_MINUTES + 1) * DAY_MINUTES
+        return int(start_time), int(start_time + task_duration)
+
     def make_schedule_from_parallel_with_stock(
-        self, job_orders: list[list[int]] | np.ndarray
+        self, job_orders: np.ndarray
     ) -> schedule_type:
         schedule: dict[int, list[tuple[int, int, int]]] = {
             m.machine_id: [(-1, 0, m.start_time)] for m in self.machines
         }
-        # job_schedule: dict[int, tuple[int, int, int]] = dict()
-        mixing_machines = [
-            m for m in self.machines if m.name.lower().startswith("mixing")
-        ]
-        for m in mixing_machines:
-            machine_idx = m.machine_id
-            for task_idx in job_orders[machine_idx]:
-                if task_idx == -1:
+        stock: dict[int, float] = {
+            p: 0.0 for p in set([j.station_settings["taste"] for j in self.jobs])
+        }
+        available_jobs: dict[int, int] = {
+            m: 0 for m in range(len(self.machines))
+        }
+        # A list with release times, hf_product, amount of stock that soon will be produced
+        awaiting_release: list[tuple[int, int, float]] = list()
+        for _ in range(len(self.jobs)):
+            # Contains the machine_idx, job_idx, start_time of the job
+            jobs_to_choose_from: list[tuple[int, int, int]] = list()
+            # machine_that_finishes_soonest = sorted(schedule, key=lambda x: schedule[x][-1][2])
+            for machine_idx in available_jobs:
+                # Get the next job that should be done on the machine
+                next_job_idx = available_jobs[machine_idx]
+                if next_job_idx >= len(job_orders[machine_idx]):
                     continue
+                task_idx: int = job_orders[machine_idx, next_job_idx]
                 if task_idx == -2:
-                    break
+                    continue
+                if task_idx == -1:
+                    available_jobs[machine_idx] += 1
+                    next_job_idx = available_jobs[machine_idx]
+                    task_idx = job_orders[machine_idx, next_job_idx]
+
                 task: Job = self.jobs[task_idx]
-                task.used = 0.0
-                if machine_idx not in task.available_machines:
-                    raise ScheduleError(
-                        f"Machine {machine_idx} not available for task {task_idx}"
-                    )
-                machine = self.machines[machine_idx]
-
-                relevant_task: list[tuple[int, int, int]] = list()
-
-                # Get the last job on the same machine
+                machine: Machine = self.machines[machine_idx]
                 latest_job_on_same_machine = schedule[machine_idx][-1]
                 start_time = latest_job_on_same_machine[2]
-                task_duration: int = int(
-                    task.available_machines[machine_idx]
-                    + self.setup_times[latest_job_on_same_machine[0], task_idx]
-                )
-                # If task is schedule before the machine starts, we move it to the start time
-                if start_time % DAY_MINUTES < machine.start_time:
-                    start_time = (
-                        machine.start_time + (start_time // DAY_MINUTES) * DAY_MINUTES
-                    )
-
-                # If the task ends after the machine stops, we move it to the next day, unless we allow preemption.
-                # If we allow preemption we will just continue with the work the next day
-                if start_time % DAY_MINUTES + task_duration > machine.end_time:
-                    # If we allow for preemption we will just add to the duration the time inbetween start and end time
-                    if machine.allow_preemption:
-                        task_duration += (
-                            DAY_MINUTES - machine.end_time + machine.start_time
-                        )
-                    else:
-                        start_time = (
-                            machine.start_time
-                            + (start_time // DAY_MINUTES + 1) * DAY_MINUTES
-                        )
-
-                end_time = start_time + task_duration
-                schedule[machine_idx].append((task_idx, start_time, end_time))
-                # job_schedule[task_idx] = (machine_idx, start_time, end_time)
-
-        # Handle the bottling machines
-        jobs_left_per_machine = {
-            m.machine_id: 0
-            for m in self.machines
-            if m.name.lower().startswith("bottling")
-        }
-        while True:
-            if all([v == len(job_orders[m]) for m, v in jobs_left_per_machine.items()]):
-                break
-            for machine_idx in jobs_left_per_machine:
-                if jobs_left_per_machine[machine_idx] == len(job_orders[machine_idx]):
+                
+                if machine.name[0] == "M":
+                    jobs_to_choose_from.append((machine_idx, task_idx, start_time)) 
                     continue
-                machine = self.machines[machine_idx]
-                task_idx = job_orders[machine_idx][jobs_left_per_machine[machine_idx]]
-                if task_idx == -1 or task_idx == -2:
-                    jobs_left_per_machine[machine_idx] += 1
-                    continue
-                task: Job = self.jobs[task_idx]
-                if machine_idx not in task.available_machines:
-                    raise ScheduleError(
-                        f"Machine {machine_idx} not available for task {task_idx}"
-                    )
-                machine = self.machines[machine_idx]
-
-                relevant_task: list[tuple[int, int, int]] = list()
-
-                # Get the last job on the same machine
-                latest_job_on_same_machine = schedule[machine_idx][-1]
-                relevant_task.append(latest_job_on_same_machine)
-
-                if self.machines[machine_idx].name.lower().startswith("bottl"):
-                    amount_needed = (
-                        task.amount
-                        * self.bottle_size_mapping[task.station_settings["bottle_size"]]
-                    )
-                    # Look for the mixing machines and see from which we can tak
-                    take_from: dict[int, list[tuple[float, int, int]]] = {
-                        m.machine_id: [(0.0, -1, 0)] for m in mixing_machines
-                    }
-                    for mix_machine in mixing_machines:
-                        mix_machine_sum = 0.0
-                        mix_machine_schedule = schedule[mix_machine.machine_id]
-                        for mix_task_idx in mix_machine_schedule:
-                            if mix_task_idx[0] == -1:
-                                continue
-                            mix_task = self.jobs[mix_task_idx[0]]
-                            if (
-                                mix_task.station_settings["taste"]
-                                == task.station_settings["taste"]
-                            ):
-                                to_use = min(
-                                    amount_needed - mix_machine_sum,
-                                    mix_task.amount - mix_task.used,
-                                )
-                                mix_machine_sum += to_use
-                                take_from[mix_machine.machine_id].append(
-                                    (to_use, mix_task_idx[0], mix_task_idx[2])
-                                )
-                            if mix_machine_sum >= amount_needed:
-                                break
-                    # Take from the mixing machine which has the lowest finish time
-                    take_from_machine = min(
-                        take_from, key=lambda x: take_from[x][-1][1]
-                    )
-                    for tsk in take_from[take_from_machine]:
-                        if tsk[1] == -1:
-                            continue
-                        # Update the used amount
-                        self.jobs[tsk[1]].used += tsk[0]
-                        # Update the relevant tasks
-                        relevant_task.append((tsk[1], 0, tsk[2]))
-
-                # Get the start time of the task
-                start_time = max([task[2] for task in relevant_task])
-
-                task_duration: int = int(
-                    task.available_machines[machine_idx]
-                    + self.setup_times[latest_job_on_same_machine[0], task_idx]
-                )
-                # If task is schedule before the machine starts, we move it to the start time
-                if start_time % DAY_MINUTES < machine.start_time:
-                    start_time = (
-                        machine.start_time + (start_time // DAY_MINUTES) * DAY_MINUTES
-                    )
-
-                # If the task ends after the machine stops, we move it to the next day, unless we allow preemption.
-                # If we allow preemption we will just continue with the work the next day
-                if start_time % DAY_MINUTES + task_duration > machine.end_time:
-                    # If we allow for preemption we will just add to the duration the time inbetween start and end time
-                    if machine.allow_preemption:
-                        task_duration += (
-                            DAY_MINUTES - machine.end_time + machine.start_time
-                        )
+                elif machine.name[0] == "B":
+                    # Check if we have enough stock to produce the product
+                    amount_needed = task.amount * self.bottle_size_mapping[task.station_settings["bottle_size"]]
+                    stock_available = stock[task.station_settings["taste"]]
+                    if stock_available >= amount_needed:
+                        jobs_to_choose_from.append((machine_idx, task_idx, start_time))
+                        continue
                     else:
-                        start_time = (
-                            machine.start_time
-                            + (start_time // DAY_MINUTES + 1) * DAY_MINUTES
-                        )
+                        # Check if we have any awaiting release
+                        if len(awaiting_release) > 0:
+                            # awaiting_release.sort(key=lambda x: x[0])
+                            for release_time, hf_product, amount in awaiting_release:
+                                if hf_product != task.station_settings["taste"]:
+                                    continue
+                                if release_time <= start_time:
+                                    stock_available += amount
+                                    if stock_available >= amount_needed:
+                                        jobs_to_choose_from.append((machine_idx, task_idx, start_time))
+                                        break
+                                else:
+                                    stock_available += amount
+                                    if stock_available >= amount_needed:
+                                        jobs_to_choose_from.append((machine_idx, task_idx, release_time))
+                                        break
 
-                end_time = start_time + task_duration
-                schedule[machine_idx].append((task_idx, start_time, end_time))
-                jobs_left_per_machine[machine_idx] += 1
-                # job_schedule[task_idx] = (machine_idx, start_time, end_time)
+            # Take the job that can start the soonest
+            chosen_job = min(jobs_to_choose_from, key=lambda x: x[2])
+            machine: Machine = self.machines[chosen_job[0]]
+            task: Job = self.jobs[chosen_job[1]]
+            if machine.name[0] == "M":
+                start_time = chosen_job[2]
+                task_duration = task.available_machines[machine.machine_id] + self.setup_times[schedule[machine.machine_id][-1][0], chosen_job[1]]
+                end_time = chosen_job[2] + task_duration
+                start_time, end_time = self._calculate_start_and_end_time(machine.allow_preemption, machine.start_time, machine.end_time, start_time, end_time, task_duration)
+                schedule[machine.machine_id].append((chosen_job[1], start_time, end_time))
+                awaiting_release.append((end_time, task.station_settings["taste"], task.amount))
+
+            elif machine.name[0] == "B":
+                amount_needed = task.amount * self.bottle_size_mapping[task.station_settings["bottle_size"]]
+                to_be_removed = list()
+                for release_time, hf_product, amount in awaiting_release:
+                    if hf_product == task.station_settings["taste"] and release_time <= chosen_job[2]:
+                        stock[task.station_settings["taste"]] += amount
+                        to_be_removed.append((release_time, hf_product, amount))
+                for r in to_be_removed:
+                    awaiting_release.remove(r)
+                stock_available = stock[task.station_settings["taste"]]
+                if stock_available < amount_needed:
+                    raise ScheduleError(f"Stock is not enough to produce {task.production_order_nr}, this shouldn't happen...")
+                start_time = chosen_job[2]
+                task_duration = task.available_machines[machine.machine_id] + self.setup_times[schedule[machine.machine_id][-1][0], chosen_job[1]]
+                end_time = chosen_job[2] + task_duration
+                start_time, end_time = self._calculate_start_and_end_time(machine.allow_preemption, machine.start_time, machine.end_time, start_time, end_time, task_duration)
+                schedule[machine.machine_id].append((chosen_job[1], start_time, end_time))
+                stock[task.station_settings["taste"]] -= amount_needed
+            available_jobs[machine.machine_id] += 1
+
+
         return schedule
 
     def makespan(self, schedule: schedule_type) -> int:
@@ -692,9 +641,9 @@ class JobShopProblem:
         if self.LOW_TARDINESS is None:
             self.LOW_TARDINESS = 16.0
         if self.LOW_TOTAL_SETUP_TIME is None:
-            self.LOW_TOTAL_SETUP_TIME = 145.0
+            self.LOW_TOTAL_SETUP_TIME = 110.0
         if self.LOW_MAKESPAN is None:
-            self.LOW_MAKESPAN = 3600.0
+            self.LOW_MAKESPAN = 3510.0
 
         return (
             (tardiness - self.LOW_TARDINESS) / self.LOW_TARDINESS
@@ -730,3 +679,11 @@ class ObjectiveFunction(Enum):
     TARDINESS = 2
     TOTAL_SETUP_TIME = 3
     BOOLEAN_TARDINESS = 4
+
+if __name__ == "__main__":
+    from src.production_orders import parse_data
+    data = parse_data(r"B:\Documents\Skola\UvA\Y3P6\git_folder\src\examples\data_v1.xlsx")
+    jssp = JobShopProblem.from_data(data)
+    # sc = jssp.make_schedule_from_parallel_with_stock(np.array([[-1,0,10,4],[-1,5,-2,-2],[-1,1,-2,-2]]))
+    # print(sc)
+    # jssp.visualize_schedule(sc)
