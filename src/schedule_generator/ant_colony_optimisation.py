@@ -4,6 +4,7 @@ from src.schedule_generator.main import JobShopProblem, ObjectiveFunction
 from src.schedule_generator.numba_numpy_functions import select_random_item, nb_set_seed
 import numpy as np
 
+
 class TwoStageACO:
     def __init__(
         self,
@@ -61,7 +62,7 @@ class TwoStageACO:
         # to the number of tasks. However, (0,0) in pheromones should become 0.0
         # quickly since it can never be chosen.
         self.pheromones_stage_one = (
-            np.ones((len(self.problem.jobs), len(self.problem.machines)))# * tau_zero
+            np.ones((len(self.problem.jobs), len(self.problem.machines)))  # * tau_zero
         )
         self.pheromones_stage_two = (
             np.ones(
@@ -71,9 +72,9 @@ class TwoStageACO:
                     len(self.problem.machines),
                 )
             )
-            #* tau_zero
+            # * tau_zero
         )
-        self.best_solution: tuple[float, np.ndarray] = (1e100, np.zeros((1,1)))
+        self.best_solution: tuple[float, np.ndarray] = (1e100, np.zeros((1, 1)))
         self.with_stock_schedule = with_stock_schedule
         self.with_local_search = with_local_search
         self.local_search_iterations = local_search_iterations
@@ -125,11 +126,12 @@ class TwoStageACO:
                 assignment[chosen_machine].add(idx)
                 continue
             probabilities = probabilities / denominator
-            chosen_machine = select_random_item(available_machines, probabilities=probabilities)
+            chosen_machine = select_random_item(
+                available_machines, probabilities=probabilities
+            )
             assignment[chosen_machine].add(idx)
         return assignment
 
-    
     def global_update_pheromones(self):
         inverse_best_value = (1.0 / self.best_solution[0]) * self.tau_zero
         for m_idx, order in enumerate(self.best_solution[1]):
@@ -159,7 +161,7 @@ class TwoStageACO:
                 # Update stage one
                 self.pheromones_stage_one[job_idx, machine] = (
                     self.pheromones_stage_one[job_idx, machine] * (1 - self.rho)
-                    + self.rho * 0.4 #* self.tau_zero
+                    + self.rho * 0.4  # * self.tau_zero
                 )
 
                 # Update stage two
@@ -167,7 +169,7 @@ class TwoStageACO:
                 self.pheromones_stage_two[last_job_idx, job_idx, machine] = (
                     self.pheromones_stage_two[last_job_idx, job_idx, machine]
                     * (1 - self.rho)
-                    + self.rho * 0.4 #* self.tau_zero
+                    + self.rho * 0.4  # * self.tau_zero
                 )
 
     def draw_job_to_schedule(
@@ -205,10 +207,15 @@ class TwoStageACO:
         probabilites = probabilites / denominator
         return select_random_item(jobs_to_schedule_list, probabilities=probabilites)
 
-    def local_search(self, schedule: np.ndarray, machine_assignment: dict[int, set[int]], schedule_objective_value: float):
-        new_schedule = schedule#.copy()
+    def local_search(
+        self,
+        schedule: np.ndarray,
+        machine_assignment: dict[int, set[int]],
+        schedule_objective_value: float,
+    ):
+        new_schedule = schedule  # .copy()
         for _ in range(self.local_search_iterations):
-            x = np.random.rand()    
+            x = np.random.rand()
             operation = (0, 0, 0)
             if x < 0.5:
                 # Swap two jobs on the same machine
@@ -236,7 +243,12 @@ class TwoStageACO:
     def run_ant(self) -> tuple[np.ndarray, dict[int, set[int]]]:
         machine_assignment = self.assign_machines()
         # schedules: list[list[int]] = [list() for _ in range(len(self.problem.machines))]
-        schedules = np.ones((len(self.problem.machines), len(self.problem.jobs)), dtype=np.int32) * -2
+        schedules = (
+            np.ones(
+                (len(self.problem.machines), len(self.problem.jobs)), dtype=np.int32
+            )
+            * -2
+        )
         for machine in range(len(self.problem.machines)):
             schedules[machine, 0] = -1
             jobs_assigned = set()
@@ -286,7 +298,6 @@ class TwoStageACO:
                 self.pheromones_stage_one += 1
                 self.pheromones_stage_two *= 0
                 self.pheromones_stage_two += 1
-
 
 
 if __name__ == "__main__":

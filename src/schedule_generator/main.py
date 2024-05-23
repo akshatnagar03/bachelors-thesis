@@ -397,7 +397,9 @@ class JobShopProblem:
 
         return schedule
 
-    def make_schedule_from_parallel(self, job_orders: list[list[int]] | np.ndarray) -> schedule_type:
+    def make_schedule_from_parallel(
+        self, job_orders: list[list[int]] | np.ndarray
+    ) -> schedule_type:
         schedule: dict[int, list[tuple[int, int, int]]] = {
             m.machine_id: [(-1, 0, m.start_time)] for m in self.machines
         }

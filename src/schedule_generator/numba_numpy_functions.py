@@ -1,9 +1,11 @@
 import numpy as np
 import numba as nb
 
+
 @nb.njit
 def nb_set_seed(seed: int):
     np.random.seed(seed)
+
 
 def select_random_item(items, probabilities: np.ndarray | None = None):
     if probabilities is None:
@@ -15,7 +17,9 @@ def select_random_item(items, probabilities: np.ndarray | None = None):
     return nb_select_random_item(items, probabilities)
 
 
-@nb.njit("int32(int32[:], float64[:])")  # input signature is optional (helps speed up the very first call)
+@nb.njit(
+    "int32(int32[:], float64[:])"
+)  # input signature is optional (helps speed up the very first call)
 def nb_select_random_item(items, probabilities: np.ndarray):
     if probabilities is None:
         return items[np.random.randint(len(items))]
