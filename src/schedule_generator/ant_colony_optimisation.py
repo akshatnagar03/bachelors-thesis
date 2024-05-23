@@ -286,6 +286,7 @@ class TwoStageACO:
                 self.pheromones_stage_one += 1
                 self.pheromones_stage_two *= 0
                 self.pheromones_stage_two += 1
+                self.generation_since_last_update = 0
 
 
 
